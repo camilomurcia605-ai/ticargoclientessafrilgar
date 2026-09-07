@@ -1,0 +1,1430 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Portal SAGRILAFT — TI Cargo</title>
+
+<!--
+  ARCHIVO ÚNICO, SIN INSTALACIÓN. Ábrelo con doble clic o súbelo a cualquier
+  hosting/intranet. Requiere internet la primera vez (React/Tailwind/jsPDF
+  se cargan desde CDN).
+
+  SEGURIDAD Y ALCANCE — LEER ANTES DE USAR CON DATOS REALES:
+  - Sin backend, por diseño: todo se guarda en localStorage del navegador
+    donde se llena cada formulario. No hay sincronización entre el celular
+    de una contraparte y tu computador — cada equipo ve solo lo que se
+    diligenció en ese mismo navegador.
+  - Los textos legales (declaraciones juramentadas, Habeas Data, compromisos
+    BASC) son los que definiste en tu especificación, transcritos literal.
+    Valídalos con el área jurídica/cumplimiento de TI Cargo antes de usarlos
+    con contrapartes reales.
+  - Para producción con backend real (recepción centralizada de PDFs,
+    sincronización multi-dispositivo), ver el proyecto Next.js hermano en
+    la carpeta del proyecto, que sí está preparado para conectar una base
+    de datos real.
+-->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ticargo: { red: '#C1272D', redDark: '#9E1F24', black: '#1D1D1B', gray: '#F5F5F5', border: '#D1D5DB' },
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { background: #F5F5F5; font-family: Arial, Calibri, sans-serif; }
+  .input-field { width:100%; border-radius:0.375rem; border:1px solid #D1D5DB; padding:0.5rem 0.75rem; font-size:0.875rem; color:#1D1D1B; }
+  .input-field:focus { outline:none; border-color:#C1272D; box-shadow:0 0 0 3px rgba(193,39,45,0.15); }
+  .label-field { margin-bottom:0.25rem; display:block; font-size:0.875rem; font-weight:500; color:#1D1D1B; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, Fragment } = React;
+const { jsPDF } = window.jspdf;
+
+/* ============================================================
+   1. CONSTANTES DE MARCA Y TEXTOS LEGALES
+   ============================================================ */
+const EMPRESA = {
+  razonSocial: 'TRANSINTERNATIONAL CARGO S.A.S.',
+  nombreCorto: 'TI Cargo',
+  nit: '805.005.709-6',
+  actividad: 'Agente de Carga Internacional',
+  direccion: 'Carrera 85D No. 48-56 Torre 6 Oficina 423, Cali - Colombia',
+  telefono: '+57(2) 485 6060',
+  email: 'operaciones@ticargo.co',
+  representanteLegal: 'Gabriel Esteban Jaramillo Hoyos',
+  oficialCumplimiento: 'Cristian Camilo Murcia Olarte',
+};
+
+const ROJO = [193, 39, 45];
+const NEGRO = [29, 29, 27];
+const GRIS = [107, 114, 128];
+const GRIS_CLARO = [245, 245, 245];
+const GRIS_BORDE = [209, 213, 219];
+
+const FORMULARIOS = [
+  { codigo: 'FO-SGR-001', slug: 'persona-natural', titulo: 'Vinculación Persona Natural', descripcion: 'Diligenciamiento SAGRILAFT para contrapartes persona natural.' },
+  { codigo: 'FO-SGR-002', slug: 'persona-juridica', titulo: 'Vinculación Persona Jurídica', descripcion: 'Diligenciamiento SAGRILAFT para contrapartes persona jurídica.' },
+  { codigo: 'FO-SGR-003', slug: 'origen-fondos', titulo: 'Declaración de Origen de Fondos y Bienes', descripcion: 'Declaración juramentada sobre el origen lícito de fondos y bienes.' },
+  { codigo: 'FO-SGR-004', slug: 'habeas-data', titulo: 'Autorización Tratamiento de Datos Personales', descripcion: 'Autorización conforme a la Ley 1581 de 2012 (Habeas Data).' },
+  { codigo: 'FO-SGR-005', slug: 'acuerdo-seguridad', titulo: 'Acuerdo de Seguridad BASC', descripcion: 'Compromisos de seguridad en la cadena de suministro.' },
+  { codigo: 'FO-SGR-006', slug: 'visita-seguridad', titulo: 'Visita Comercial / Visita de Seguridad', descripcion: 'Cuestionario de verificación de seguridad en instalaciones.' },
+  { codigo: 'FO-SGR-007', slug: 'carta-responsabilidad', titulo: 'Carta de Responsabilidad / Mandato Comercial', descripcion: 'Declaración de responsabilidad y mandato como agente de carga.' },
+];
+
+const TEXTO_HABEAS_DATA = `En cumplimiento de la Ley Estatutaria 1581 de 2012 "Por la cual se dictan disposiciones generales para la protección de datos personales" y su Decreto Reglamentario 1377 de 2013, TRANSINTERNATIONAL CARGO S.A.S., identificada con NIT 805.005.709-6, en calidad de Responsable del Tratamiento de Datos Personales, informa que los datos personales recogidos serán utilizados para:
+
+a) Cumplimiento del Sistema de Autocontrol y Gestión del Riesgo Integral de Lavado de Activos, Financiación del Terrorismo y Financiamiento de la Proliferación de Armas de Destrucción Masiva (SAGRILAFT).
+b) Consulta en listas vinculantes y restrictivas nacionales e internacionales (OFAC, ONU, UE, entre otras).
+c) Verificación de antecedentes judiciales, disciplinarios, fiscales y de policía.
+d) Gestión de la relación comercial, contractual y operativa.
+e) Comunicación de información relacionada con los servicios contratados.
+f) Cumplimiento de requerimientos legales ante autoridades competentes, incluyendo la Unidad de Información y Análisis Financiero (UIAF) y la Superintendencia de Sociedades.
+
+El titular tiene derecho a conocer, actualizar, rectificar y solicitar la supresión de sus datos personales en cualquier momento, dirigiendo su solicitud a: operaciones@ticargo.co o a la dirección Carrera 85D No. 48-56 Torre 6 Oficina 423, Cali.`;
+
+const TEXTO_DECLARACION_ORIGEN_FONDOS = 'Declaro bajo la gravedad del juramento, que los fondos, bienes y recursos que poseo y que empleo en mis actividades comerciales y transacciones con TRANSINTERNATIONAL CARGO S.A.S. provienen de actividades lícitas y no están vinculados con el lavado de activos, la financiación del terrorismo ni la financiación de la proliferación de armas de destrucción masiva. Los fondos aquí descritos corresponden al ejercicio normal de mis actividades.';
+
+const COMPROMISOS_SEGURIDAD_BASC = [
+  'Implementar y mantener medidas de seguridad para prevenir la contaminación de la carga con sustancias ilícitas.',
+  'Notificar inmediatamente a TRANSINTERNATIONAL CARGO S.A.S. cualquier actividad sospechosa o irregularidad en la cadena de suministro.',
+  'Garantizar la integridad de la carga desde el punto de origen hasta el destino final.',
+  'Verificar antecedentes de sus empleados y subcontratistas involucrados en las operaciones.',
+  'Colaborar con las auditorías de seguridad que TRANSINTERNATIONAL CARGO S.A.S. requiera.',
+  'Mantener registros documentados de las medidas de seguridad implementadas.',
+  'Reportar cualquier incidente de seguridad dentro de las 24 horas siguientes a su ocurrencia.',
+  'Cumplir con la normatividad colombiana e internacional vigente en materia de seguridad de la cadena de suministro.',
+];
+
+const PREGUNTAS_VISITA_SEGURIDAD = [
+  '¿La empresa tiene un área específica para recepción de visitantes?',
+  '¿Se solicita identificación a los visitantes?',
+  '¿Se lleva registro de ingreso y salida de visitantes?',
+  '¿Las instalaciones cuentan con cerramiento perimetral (muro, cerca, reja)?',
+  '¿Existe control de acceso vehicular?',
+  '¿Las áreas de carga y descarga están debidamente señalizadas?',
+  '¿Existe circuito cerrado de televisión (CCTV)?',
+  '¿Se cuenta con servicio de vigilancia privada?',
+  '¿La empresa tiene política de seguridad documentada?',
+  '¿Se realizan verificación de antecedentes al personal?',
+  '¿Se realizan capacitaciones periódicas en seguridad al personal?',
+  '¿Existe un procedimiento para el manejo de mercancía?',
+  '¿Se inspeccionan los vehículos antes de carga y después de descarga?',
+  '¿Se utilizan sellos de seguridad en las unidades de transporte?',
+  '¿Se lleva un registro fotográfico del estado de la mercancía?',
+  '¿La empresa tiene seguro de mercancía / carga?',
+  '¿Se cuenta con procedimientos de emergencia?',
+  '¿Existe un plan de contingencia documentado?',
+  '¿Las áreas de almacenamiento están debidamente iluminadas?',
+  '¿Se controla el acceso a las áreas de almacenamiento?',
+  '¿La empresa tiene certificación BASC vigente?',
+  '¿La empresa tiene certificación ISO vigente? ¿Cuáles?',
+  '¿Se manejan sustancias o materiales peligrosos?',
+  '¿Se cuenta con señalización de emergencia y rutas de evacuación?',
+  '¿La empresa reporta operaciones sospechosas (ROS)?',
+  '¿Existe un programa de prevención de LA/FT?',
+];
+
+const SI_NO = [{ value: 'si', label: 'Sí' }, { value: 'no', label: 'No' }];
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   2. UTILIDADES: rutas anidadas, moneda, fechas, localStorage
+   ============================================================ */
+function getPath(obj, path) {
+  return path.split('.').reduce((acc, key) => (acc === null || acc === undefined ? acc : acc[key]), obj);
+}
+function setPath(obj, path, value) {
+  const keys = path.split('.');
+  const raiz = Array.isArray(obj) ? [...obj] : { ...(obj || {}) };
+  let cursor = raiz;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i];
+    const nextIsIndex = /^\d+$/.test(keys[i + 1]);
+    const existente = cursor[k];
+    cursor[k] = existente ? (Array.isArray(existente) ? [...existente] : { ...existente }) : (nextIsIndex ? [] : {});
+    cursor = cursor[k];
+  }
+  cursor[keys[keys.length - 1]] = value;
+  return raiz;
+}
+
+function formatCOP(value) {
+  if (value === undefined || value === null || value === '') return '';
+  const n = typeof value === 'string' ? Number(value.replace(/[^\d.-]/g, '')) : value;
+  if (Number.isNaN(n)) return '';
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+}
+function parseCOP(value) {
+  const digits = value.replace(/[^\d]/g, '');
+  return digits ? Number(digits) : 0;
+}
+function formatFechaCorta(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-CO');
+}
+function hoyISO() { return new Date().toISOString().slice(0, 10); }
+
+function draftKey(codigo) { return `ticargo_form_${codigo}`; }
+function guardarBorrador(codigo, data) {
+  try { localStorage.setItem(draftKey(codigo), JSON.stringify({ data, savedAt: new Date().toISOString() })); return true; }
+  catch (e) { console.error(e); return false; }
+}
+function leerBorrador(codigo) {
+  try { const raw = localStorage.getItem(draftKey(codigo)); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function marcarCompletado(codigo) {
+  try { localStorage.setItem(`${draftKey(codigo)}_completado`, 'true'); } catch {}
+}
+function estadoFormulario(codigo) {
+  const borrador = leerBorrador(codigo);
+  if (!borrador) return 'nuevo';
+  try { if (localStorage.getItem(`${draftKey(codigo)}_completado`) === 'true') return 'completado'; } catch {}
+  return 'en-progreso';
+}
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   3. ICONOS (SVG inline, sin librería)
+   ============================================================ */
+const Icon = ({ path, size = 18, className = '' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+);
+const IconShield = (p) => <Icon {...p} path={<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/>} />;
+const IconFile = (p) => <Icon {...p} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>} />;
+const IconChevronRight = (p) => <Icon {...p} path={<polyline points="9 18 15 12 9 6"/>} />;
+const IconChevronLeft = (p) => <Icon {...p} path={<polyline points="15 18 9 12 15 6"/>} />;
+const IconPlus = (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />;
+const IconTrash = (p) => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></>} />;
+const IconSave = (p) => <Icon {...p} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />;
+const IconEye = (p) => <Icon {...p} path={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>} />;
+const IconDownload = (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />;
+const IconX = (p) => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />;
+const IconLayout = (p) => <Icon {...p} path={<><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></>} />;
+const IconCircle = (p) => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />;
+const IconCircleDot = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></>} />;
+const IconCircleCheck = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></>} />;
+const IconAlert = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />;
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   4. MOTOR DE CAMPOS (config-driven, como el proyecto Next.js)
+   ============================================================ */
+function Campo({ field, datos, set }) {
+  if (field.showIf && !field.showIf(datos)) return null;
+  const valor = getPath(datos, field.name);
+  const colSpanClass = field.colSpan === 2 ? 'sm:col-span-2' : '';
+
+  if (field.type === 'staticText') {
+    return (
+      <div className={colSpanClass}>
+        {field.label && <p className="mb-1.5 text-sm font-semibold text-ticargo-black">{field.label}</p>}
+        <div className="whitespace-pre-line rounded-lg border border-ticargo-border bg-ticargo-gray/60 p-4 text-xs leading-relaxed text-ticargo-black/75">{field.content}</div>
+      </div>
+    );
+  }
+
+  if (field.type === 'signature') {
+    return (
+      <div className={`rounded-lg border border-ticargo-border bg-ticargo-gray/50 p-4 sm:col-span-2`}>
+        <p className="mb-3 text-sm font-semibold text-ticargo-black">{field.label || 'Firma'}</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <TextInput label="Nombre completo del firmante" value={getPath(datos, field.name + '.nombre')} onChange={(v) => set(field.name + '.nombre', v)} required />
+          <TextInput label="Número de documento" value={getPath(datos, field.name + '.documento')} onChange={(v) => set(field.name + '.documento', v)} required />
+          <TextInput type="date" label="Fecha de firma" value={getPath(datos, field.name + '.fecha')} onChange={(v) => set(field.name + '.fecha', v)} required />
+          <TextInput label="Ciudad de firma" value={getPath(datos, field.name + '.ciudad')} onChange={(v) => set(field.name + '.ciudad', v)} required />
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'dynamicList') {
+    const items = valor || [];
+    const max = field.maxItems || 10;
+    const plantilla = Object.fromEntries(field.itemFields.map((f) => [f.name, '']));
+    return (
+      <div className="sm:col-span-2">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-ticargo-black">{field.label}</p>
+          <button type="button" disabled={items.length >= max} onClick={() => set(field.name, [...items, plantilla])}
+            className="flex items-center gap-1 rounded-md border border-ticargo-red px-2.5 py-1 text-xs font-medium text-ticargo-red hover:bg-ticargo-red/5 disabled:cursor-not-allowed disabled:opacity-40">
+            <IconPlus size={14} /> Agregar ({items.length}/{max})
+          </button>
+        </div>
+        <div className="space-y-3">
+          {items.length === 0 && <p className="text-xs text-ticargo-black/40">No se han agregado registros.</p>}
+          {items.map((item, idx) => (
+            <div key={idx} className="relative rounded-lg border border-ticargo-border bg-white p-4">
+              <button type="button" onClick={() => set(field.name, items.filter((_, i) => i !== idx))} className="absolute right-3 top-3 text-ticargo-black/30 hover:text-ticargo-red">
+                <IconTrash size={15} />
+              </button>
+              <div className="grid grid-cols-1 gap-3 pr-6 sm:grid-cols-2">
+                {field.itemFields.map((sub) => (
+                  <Campo key={sub.name} field={{ ...sub, name: `${field.name}.${idx}.${sub.name}` }} datos={datos} set={set} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'matrix') {
+    const preguntas = field.preguntas;
+    return (
+      <div className="sm:col-span-2 overflow-x-auto rounded-lg border border-ticargo-border">
+        <table className="w-full text-sm">
+          <thead className="bg-ticargo-gray">
+            <tr>
+              <th className="w-8 px-3 py-2 text-left font-semibold text-ticargo-black">#</th>
+              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Pregunta</th>
+              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Respuesta</th>
+              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Observación</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ticargo-border">
+            {preguntas.map((pregunta, idx) => {
+              const base = `${field.name}.${idx}`;
+              const respuesta = getPath(datos, `${base}.respuesta`);
+              return (
+                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-ticargo-gray/40'}>
+                  <td className="px-3 py-2 align-top text-ticargo-black/50">{idx + 1}</td>
+                  <td className="px-3 py-2 align-top text-ticargo-black/85">{pregunta}</td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="flex gap-3">
+                      {[['si','Sí'],['no','No'],['na','N.A.']].map(([v,l]) => (
+                        <label key={v} className="flex items-center gap-1 text-xs text-ticargo-black/70">
+                          <input type="radio" checked={respuesta === v} onChange={() => set(`${base}.respuesta`, v)} className="h-3.5 w-3.5 accent-ticargo-red" /> {l}
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <input type="text" value={getPath(datos, `${base}.observacion`) || ''} onChange={(e) => set(`${base}.observacion`, e.target.value)}
+                      className="w-full rounded border border-ticargo-border px-2 py-1 text-xs focus:border-ticargo-red focus:outline-none" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (field.type === 'currency') {
+    return (
+      <div className={colSpanClass}>
+        <label className="label-field">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</label>
+        <input type="text" inputMode="numeric" className="input-field" placeholder="$ 0" value={valor ? formatCOP(valor) : ''} onChange={(e) => set(field.name, parseCOP(e.target.value))} />
+      </div>
+    );
+  }
+
+  if (field.type === 'select') {
+    return (
+      <div className={colSpanClass}>
+        <label className="label-field">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</label>
+        <select className="input-field" value={valor || ''} onChange={(e) => set(field.name, e.target.value)}>
+          <option value="">Seleccione...</option>
+          {field.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    );
+  }
+
+  if (field.type === 'radio') {
+    return (
+      <div className={colSpanClass}>
+        <p className="mb-1.5 text-sm font-medium text-ticargo-black">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</p>
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {field.options.map((o) => (
+            <label key={o.value} className="flex items-center gap-1.5 text-sm text-ticargo-black/80">
+              <input type="radio" checked={valor === o.value} onChange={() => set(field.name, o.value)} className="h-4 w-4 accent-ticargo-red" /> {o.label}
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'checkboxGroup') {
+    const arr = valor || [];
+    return (
+      <div className={colSpanClass}>
+        <p className="mb-1.5 text-sm font-medium text-ticargo-black">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</p>
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {field.options.map((o) => (
+            <label key={o.value} className="flex items-center gap-1.5 text-sm text-ticargo-black/80">
+              <input type="checkbox" checked={arr.includes(o.value)} onChange={() => set(field.name, arr.includes(o.value) ? arr.filter((v) => v !== o.value) : [...arr, o.value])} className="h-4 w-4 rounded accent-ticargo-red" /> {o.label}
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field.type === 'checkbox') {
+    return (
+      <label className={`flex items-start gap-2 text-sm text-ticargo-black/85 ${colSpanClass}`}>
+        <input type="checkbox" checked={!!valor} onChange={(e) => set(field.name, e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-ticargo-red" />
+        <span>{field.label} {field.required && <span className="text-ticargo-red">*</span>}</span>
+      </label>
+    );
+  }
+
+  // text, email, url, number, date, textarea
+  return (
+    <div className={colSpanClass}>
+      <TextInput label={field.label} type={field.type} value={valor} onChange={(v) => set(field.name, v)} required={field.required} placeholder={field.placeholder} />
+    </div>
+  );
+}
+
+function TextInput({ label, type = 'text', value, onChange, required, placeholder }) {
+  return (
+    <div>
+      <label className="label-field">{label} {required && <span className="text-ticargo-red">*</span>}</label>
+      {type === 'textarea' ? (
+        <textarea rows={3} className="input-field" placeholder={placeholder} value={value || ''} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <input type={type} className="input-field" placeholder={placeholder} value={value || ''} onChange={(e) => onChange(e.target.value)} />
+      )}
+    </div>
+  );
+}
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   5. CONFIGURACIÓN DE LOS 7 FORMULARIOS
+   ============================================================ */
+const representanteFields = [
+  { name: 'nombres', label: 'Nombres y apellidos', type: 'text' },
+  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'select', options: [{value:'CC',label:'CC'},{value:'CE',label:'CE'},{value:'Pasaporte',label:'Pasaporte'},{value:'PPT',label:'PPT'}] },
+  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
+  { name: 'fechaExpedicion', label: 'Fecha de expedición', type: 'date' },
+  { name: 'lugarExpedicion', label: 'Lugar de expedición', type: 'text' },
+  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
+  { name: 'cargoPep', label: 'Cargo (si es PEP)', type: 'text' },
+  { name: 'entidadPep', label: 'Entidad (si es PEP)', type: 'text' },
+  { name: 'fechaVinculacionPep', label: 'Fecha vinculación', type: 'date' },
+  { name: 'fechaDesvinculacionPep', label: 'Fecha desvinculación', type: 'date' },
+];
+const socioFields = [
+  { name: 'nombreRazonSocial', label: 'Nombre o razón social', type: 'text' },
+  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'select', options: [{value:'CC',label:'CC'},{value:'CE',label:'CE'},{value:'NIT',label:'NIT'},{value:'Pasaporte',label:'Pasaporte'}] },
+  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
+  { name: 'porcentajeParticipacion', label: 'Porcentaje de participación (%)', type: 'number' },
+  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
+  { name: 'paisResidencia', label: 'País de residencia/domicilio', type: 'text' },
+];
+const juntaFields = [
+  { name: 'nombres', label: 'Nombres y apellidos', type: 'text' },
+  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'text' },
+  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
+  { name: 'cargoJunta', label: 'Cargo en la junta', type: 'select', options: [{value:'Presidente',label:'Presidente'},{value:'Vicepresidente',label:'Vicepresidente'},{value:'Miembro principal',label:'Miembro principal'},{value:'Miembro suplente',label:'Miembro suplente'}] },
+  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
+];
+const referenciaFields = [
+  { name: 'tipo', label: 'Tipo', type: 'select', options: [{value:'Comercial',label:'Comercial'},{value:'Bancaria',label:'Bancaria'}] },
+  { name: 'nombreEntidad', label: 'Nombre de la entidad/empresa', type: 'text' },
+  { name: 'contacto', label: 'Contacto', type: 'text' },
+  { name: 'telefono', label: 'Teléfono', type: 'text' },
+  { name: 'ciudad', label: 'Ciudad', type: 'text' },
+];
+
+const FORM_CONFIGS = {
+  'persona-natural': {
+    codigo: 'FO-SGR-001', titulo: 'Formulario de Vinculación — Persona Natural', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
+    initial: () => ({
+      general: { tipoVinculacion: '', tipoContraparte: '', tipoContraparteOtro: '', fechaDiligenciamiento: hoyISO() },
+      personales: { primerApellido:'', segundoApellido:'', nombres:'', tipoDocumento:'', numeroDocumento:'', fechaExpedicion:'', lugarExpedicion:'', fechaNacimiento:'', lugarNacimiento:'', nacionalidad:'Colombiana', genero:'', estadoCivil:'' },
+      contacto: { direccionResidencia:'', ciudad:'', departamento:'', pais:'Colombia', telefonoFijo:'', celular:'', email:'', direccionCorrespondencia:'' },
+      laboral: { actividadEconomica:'', profesion:'', codigoCiiu:'', descripcionActividad:'', empresa:'', cargo:'', direccionEmpresa:'', ciudadEmpresa:'', telefonoEmpresa:'' },
+      financiera: { ingresosMensuales:0, egresosMensuales:0, otrosIngresos:0, detalleOtrosIngresos:'', totalActivos:0, totalPasivos:0 },
+      internacional: { operaMonedaExtranjera:'', tipoOperacion:[], poseeProductosExterior:'', tipoProducto:'', entidad:'', paisProducto:'', ciudadProducto:'', montoProducto:0 },
+      pep: { esPep:'', cargoPep:'', fechaVinculacionPep:'', fechaDesvinculacionPep:'', tieneVinculoPep:'', nombrePep:'', parentescoPep:'', cargoPepVinculo:'', manejaRecursosPublicos:'', reconocimientoPublico:'', ejercePoderPublico:'' },
+      declaraciones: { declaracionJuramentada:false, autorizacionConsulta:false, autorizacionDatos:false },
+      firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
+    }),
+    sections: [
+      { titulo: 'Información General', fields: [
+        { name:'general.tipoVinculacion', label:'Tipo de vinculación', type:'radio', required:true, options:[{value:'nueva',label:'Vinculación nueva'},{value:'actualizacion',label:'Actualización anual'}] },
+        { name:'general.tipoContraparte', label:'Tipo de contraparte', type:'radio', required:true, options:[{value:'cliente',label:'Cliente'},{value:'proveedor',label:'Proveedor'},{value:'aliado',label:'Aliado logístico'},{value:'otro',label:'Otro'}] },
+        { name:'general.tipoContraparteOtro', label:'Especifique otro tipo de contraparte', type:'text', showIf:(v)=>getPath(v,'general.tipoContraparte')==='otro' },
+        { name:'general.fechaDiligenciamiento', label:'Fecha de diligenciamiento', type:'date' },
+      ]},
+      { titulo: 'Datos Personales', fields: [
+        { name:'personales.primerApellido', label:'Primer apellido', type:'text', required:true },
+        { name:'personales.segundoApellido', label:'Segundo apellido', type:'text' },
+        { name:'personales.nombres', label:'Nombres', type:'text', required:true },
+        { name:'personales.tipoDocumento', label:'Tipo de documento', type:'select', required:true, options:[{value:'CC',label:'Cédula de ciudadanía'},{value:'CE',label:'Cédula de extranjería'},{value:'Pasaporte',label:'Pasaporte'},{value:'PPT',label:'PPT'},{value:'PEP',label:'PEP'},{value:'Otro',label:'Otro'}] },
+        { name:'personales.numeroDocumento', label:'Número de documento', type:'text', required:true },
+        { name:'personales.fechaExpedicion', label:'Fecha de expedición', type:'date' },
+        { name:'personales.lugarExpedicion', label:'Lugar de expedición', type:'text', required:true },
+        { name:'personales.fechaNacimiento', label:'Fecha de nacimiento', type:'date', required:true },
+        { name:'personales.lugarNacimiento', label:'Lugar de nacimiento', type:'text', required:true },
+        { name:'personales.nacionalidad', label:'Nacionalidad', type:'text', required:true },
+        { name:'personales.genero', label:'Género', type:'radio', options:[{value:'M',label:'Masculino'},{value:'F',label:'Femenino'},{value:'Otro',label:'Otro'}] },
+        { name:'personales.estadoCivil', label:'Estado civil', type:'select', options:['Soltero(a)','Casado(a)','Unión libre','Divorciado(a)','Viudo(a)'].map(v=>({value:v,label:v})) },
+      ]},
+      { titulo: 'Información de Contacto', fields: [
+        { name:'contacto.direccionResidencia', label:'Dirección de residencia', type:'text', required:true, colSpan:2 },
+        { name:'contacto.ciudad', label:'Ciudad', type:'text', required:true },
+        { name:'contacto.departamento', label:'Departamento', type:'text', required:true },
+        { name:'contacto.pais', label:'País', type:'text', required:true },
+        { name:'contacto.telefonoFijo', label:'Teléfono fijo', type:'text' },
+        { name:'contacto.celular', label:'Celular', type:'text', required:true },
+        { name:'contacto.email', label:'Correo electrónico', type:'email', required:true },
+        { name:'contacto.direccionCorrespondencia', label:'Dirección de correspondencia (si es diferente)', type:'text', colSpan:2 },
+      ]},
+      { titulo: 'Información Laboral / Actividad Económica', fields: [
+        { name:'laboral.actividadEconomica', label:'Actividad económica', type:'radio', options:['Asalariado','Independiente','Rentista','Pensionado','Estudiante','Otro'].map(v=>({value:v,label:v})) },
+        { name:'laboral.profesion', label:'Profesión / Ocupación', type:'text', required:true },
+        { name:'laboral.codigoCiiu', label:'Código CIIU', type:'text', placeholder:'4 dígitos' },
+        { name:'laboral.descripcionActividad', label:'Descripción de la actividad económica', type:'textarea', required:true, colSpan:2 },
+        { name:'laboral.empresa', label:'Empresa donde labora', type:'text' },
+        { name:'laboral.cargo', label:'Cargo', type:'text' },
+        { name:'laboral.direccionEmpresa', label:'Dirección de la empresa', type:'text' },
+        { name:'laboral.ciudadEmpresa', label:'Ciudad de la empresa', type:'text' },
+        { name:'laboral.telefonoEmpresa', label:'Teléfono de la empresa', type:'text' },
+      ]},
+      { titulo: 'Información Financiera (COP)', fields: [
+        { name:'financiera.ingresosMensuales', label:'Ingresos mensuales', type:'currency', required:true },
+        { name:'financiera.egresosMensuales', label:'Egresos mensuales', type:'currency', required:true },
+        { name:'financiera.otrosIngresos', label:'Otros ingresos mensuales', type:'currency' },
+        { name:'financiera.detalleOtrosIngresos', label:'Detalle otros ingresos', type:'text' },
+        { name:'financiera.totalActivos', label:'Total activos', type:'currency', required:true },
+        { name:'financiera.totalPasivos', label:'Total pasivos', type:'currency', required:true },
+      ]},
+      { titulo: 'Operaciones Internacionales', fields: [
+        { name:'internacional.operaMonedaExtranjera', label:'¿Realiza operaciones en moneda extranjera?', type:'radio', options:SI_NO },
+        { name:'internacional.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', showIf:(v)=>getPath(v,'internacional.operaMonedaExtranjera')==='si', options:['Importación','Exportación','Inversiones','Préstamos','Transferencias','Otro'].map(v=>({value:v,label:v})) },
+        { name:'internacional.poseeProductosExterior', label:'¿Posee productos financieros en el exterior?', type:'radio', options:SI_NO },
+        { name:'internacional.tipoProducto', label:'Tipo de producto', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+        { name:'internacional.entidad', label:'Entidad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+        { name:'internacional.paisProducto', label:'País', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+        { name:'internacional.ciudadProducto', label:'Ciudad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+        { name:'internacional.montoProducto', label:'Monto', type:'currency', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+      ]},
+      { titulo: 'Personas Expuestas Políticamente (PEP)', fields: [
+        { name:'pep.esPep', label:'¿Es usted una Persona Expuesta Políticamente (PEP)?', type:'radio', options:SI_NO },
+        { name:'pep.cargoPep', label:'Cargo', type:'text', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
+        { name:'pep.fechaVinculacionPep', label:'Fecha de vinculación al cargo', type:'date', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
+        { name:'pep.fechaDesvinculacionPep', label:'Fecha de desvinculación', type:'date', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
+        { name:'pep.tieneVinculoPep', label:'¿Tiene algún vínculo con una PEP? (familiar, socio, asociado)', type:'radio', options:SI_NO },
+        { name:'pep.nombrePep', label:'Nombre de la PEP', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
+        { name:'pep.parentescoPep', label:'Parentesco', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
+        { name:'pep.cargoPepVinculo', label:'Cargo de la PEP', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
+        { name:'pep.manejaRecursosPublicos', label:'¿Por su cargo o actividad maneja recursos públicos?', type:'radio', options:SI_NO },
+        { name:'pep.reconocimientoPublico', label:'¿Por su actividad goza de reconocimiento público?', type:'radio', options:SI_NO },
+        { name:'pep.ejercePoderPublico', label:'¿Ejerce algún grado de poder público?', type:'radio', options:SI_NO },
+      ]},
+      { titulo: 'Declaraciones y Autorizaciones', fields: [
+        { name:'declaraciones.declaracionJuramentada', label:'Declaro bajo la gravedad del juramento que: (a) los recursos que poseo provienen de actividades lícitas; (b) no he sido condenado por delitos relacionados con lavado de activos, financiación del terrorismo o delitos relacionados; (c) no me encuentro incluido en listas vinculantes (OFAC, ONU, UE) ni en listas restrictivas nacionales o internacionales; (d) la información suministrada es veraz, verificable y completa.', type:'checkbox', required:true, colSpan:2 },
+        { name:'declaraciones.autorizacionConsulta', label:'Autorizo a TRANSINTERNATIONAL CARGO S.A.S. para que consulte, solicite, reporte y divulgue mi información personal ante cualquier entidad pública o privada, incluyendo centrales de información y listas de control LA/FT, de acuerdo con la normatividad vigente.', type:'checkbox', required:true, colSpan:2 },
+        { name:'declaraciones.autorizacionDatos', label:'Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012 y la política de tratamiento de datos de TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
+        { name:'firma', label:'Firma', type:'signature' },
+      ]},
+    ],
+  },
+};
+</script>
+
+<script type="text/babel" data-presets="react">
+/* Formulario 2: Persona Jurídica */
+FORM_CONFIGS['persona-juridica'] = {
+  codigo: 'FO-SGR-002', titulo: 'Formulario de Vinculación — Persona Jurídica', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
+  initial: () => ({
+    general: { tipoVinculacion:'', tipoContraparte:'', tipoContraparteOtro:'', fechaDiligenciamiento: hoyISO() },
+    datos: { razonSocial:'', nombreComercial:'', nit:'', tipoSociedad:'', fechaConstitucion:'', lugarConstitucion:'', objetoSocial:'', codigoCiiu:'', descripcionActividad:'' },
+    contacto: { direccionPrincipal:'', ciudad:'', departamento:'', pais:'Colombia', telefono:'', sitioWeb:'', email:'' },
+    representantes: [], socios: [], juntaDirectiva: [],
+    financiera: { ingresosOperacionales:0, totalEgresos:0, otrosIngresos:0, detalleOtrosIngresos:'', totalActivos:0, totalPasivos:0, capitalSocial:0 },
+    internacional: { operaMonedaExtranjera:'', tipoOperacion:[], poseeProductosExterior:'', tipoProducto:'', entidad:'', paisProducto:'', ciudadProducto:'', montoProducto:0 },
+    tributaria: { regimenIva:'', granContribuyente:'', autorretenedor:'', agenteRetencion:'' },
+    referencias: [],
+    declaraciones: { declaracionJuramentada:false, autorizacionConsulta:false, autorizacionDatos:false },
+    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
+  }),
+  sections: [
+    { titulo:'Información General', fields:[
+      { name:'general.tipoVinculacion', label:'Tipo de vinculación', type:'radio', required:true, options:[{value:'nueva',label:'Vinculación nueva'},{value:'actualizacion',label:'Actualización anual'}] },
+      { name:'general.tipoContraparte', label:'Tipo de contraparte', type:'radio', required:true, options:[{value:'cliente',label:'Cliente'},{value:'proveedor',label:'Proveedor'},{value:'aliado',label:'Aliado logístico'},{value:'otro',label:'Otro'}] },
+      { name:'general.tipoContraparteOtro', label:'Especifique otro', type:'text', showIf:(v)=>getPath(v,'general.tipoContraparte')==='otro' },
+      { name:'general.fechaDiligenciamiento', label:'Fecha de diligenciamiento', type:'date' },
+    ]},
+    { titulo:'Datos de la Persona Jurídica', fields:[
+      { name:'datos.razonSocial', label:'Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'datos.nombreComercial', label:'Nombre comercial', type:'text' },
+      { name:'datos.nit', label:'NIT', type:'text', required:true, placeholder:'805.005.709-6' },
+      { name:'datos.tipoSociedad', label:'Tipo de sociedad', type:'select', required:true, options:['S.A.S.','S.A.','Ltda.','S.C.A.','S. en C.','E.U.','Sucursal extranjera','Otro'].map(v=>({value:v,label:v})) },
+      { name:'datos.fechaConstitucion', label:'Fecha de constitución', type:'date', required:true },
+      { name:'datos.lugarConstitucion', label:'Lugar de constitución', type:'text', required:true },
+      { name:'datos.objetoSocial', label:'Objeto social', type:'textarea', required:true, colSpan:2 },
+      { name:'datos.codigoCiiu', label:'Código CIIU', type:'text', required:true },
+      { name:'datos.descripcionActividad', label:'Descripción de la actividad económica', type:'textarea', required:true, colSpan:2 },
+    ]},
+    { titulo:'Información de Contacto', fields:[
+      { name:'contacto.direccionPrincipal', label:'Dirección principal', type:'text', required:true, colSpan:2 },
+      { name:'contacto.ciudad', label:'Ciudad', type:'text', required:true },
+      { name:'contacto.departamento', label:'Departamento', type:'text', required:true },
+      { name:'contacto.pais', label:'País', type:'text', required:true },
+      { name:'contacto.telefono', label:'Teléfono', type:'text', required:true },
+      { name:'contacto.sitioWeb', label:'Sitio web', type:'url' },
+      { name:'contacto.email', label:'Correo electrónico corporativo', type:'email', required:true },
+    ]},
+    { titulo:'Representante(s) Legal(es)', fields:[
+      { name:'representantes', label:'Representantes legales (máx. 3)', type:'dynamicList', itemFields:representanteFields, maxItems:3 },
+    ]},
+    { titulo:'Composición Accionaria', fields:[
+      { name:'socios', label:'Socios / accionistas con participación ≥ 5% (máx. 10)', type:'dynamicList', itemFields:socioFields, maxItems:10 },
+    ]},
+    { titulo:'Junta Directiva (Opcional)', fields:[
+      { name:'juntaDirectiva', label:'Miembros de junta directiva (máx. 7)', type:'dynamicList', itemFields:juntaFields, maxItems:7 },
+    ]},
+    { titulo:'Información Financiera (COP — último cierre fiscal)', fields:[
+      { name:'financiera.ingresosOperacionales', label:'Total ingresos operacionales', type:'currency', required:true },
+      { name:'financiera.totalEgresos', label:'Total egresos', type:'currency', required:true },
+      { name:'financiera.otrosIngresos', label:'Otros ingresos no operacionales', type:'currency' },
+      { name:'financiera.detalleOtrosIngresos', label:'Detalle otros ingresos', type:'text' },
+      { name:'financiera.totalActivos', label:'Total activos', type:'currency', required:true },
+      { name:'financiera.totalPasivos', label:'Total pasivos', type:'currency', required:true },
+      { name:'financiera.capitalSocial', label:'Capital social o pagado', type:'currency', required:true },
+    ]},
+    { titulo:'Operaciones Internacionales', fields:[
+      { name:'internacional.operaMonedaExtranjera', label:'¿Realiza operaciones en moneda extranjera?', type:'radio', options:SI_NO },
+      { name:'internacional.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', showIf:(v)=>getPath(v,'internacional.operaMonedaExtranjera')==='si', options:['Importación','Exportación','Inversiones','Préstamos','Transferencias','Otro'].map(v=>({value:v,label:v})) },
+      { name:'internacional.poseeProductosExterior', label:'¿Posee productos financieros en el exterior?', type:'radio', options:SI_NO },
+      { name:'internacional.tipoProducto', label:'Tipo de producto', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+      { name:'internacional.entidad', label:'Entidad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+      { name:'internacional.paisProducto', label:'País', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+      { name:'internacional.ciudadProducto', label:'Ciudad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+      { name:'internacional.montoProducto', label:'Monto', type:'currency', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
+    ]},
+    { titulo:'Información Tributaria', fields:[
+      { name:'tributaria.regimenIva', label:'Régimen tributario', type:'radio', options:[{value:'Responsable de IVA',label:'Responsable de IVA'},{value:'No responsable de IVA',label:'No responsable de IVA'}] },
+      { name:'tributaria.granContribuyente', label:'Gran contribuyente', type:'radio', options:SI_NO },
+      { name:'tributaria.autorretenedor', label:'Autorretenedor', type:'radio', options:SI_NO },
+      { name:'tributaria.agenteRetencion', label:'Agente de retención', type:'radio', options:SI_NO },
+    ]},
+    { titulo:'Referencias', fields:[
+      { name:'referencias', label:'Referencias comerciales/bancarias (máx. 3)', type:'dynamicList', itemFields:referenciaFields, maxItems:3 },
+    ]},
+    { titulo:'Declaraciones y Autorizaciones', fields:[
+      { name:'declaraciones.declaracionJuramentada', label:'Declaramos bajo la gravedad del juramento que: (a) los recursos de la sociedad provienen de actividades lícitas; (b) la sociedad, sus socios y representantes no han sido condenados por delitos relacionados con lavado de activos o financiación del terrorismo; (c) no se encuentran incluidos en listas vinculantes (OFAC, ONU, UE) ni en listas restrictivas; (d) la información suministrada es veraz, verificable y completa.', type:'checkbox', required:true, colSpan:2 },
+      { name:'declaraciones.autorizacionConsulta', label:'Autorizamos a TRANSINTERNATIONAL CARGO S.A.S. para que consulte, solicite, reporte y divulgue nuestra información ante cualquier entidad pública o privada, incluyendo centrales de información y listas de control LA/FT.', type:'checkbox', required:true, colSpan:2 },
+      { name:'declaraciones.autorizacionDatos', label:'Autorizamos el tratamiento de los datos personales conforme a la Ley 1581 de 2012 y la política de TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
+      { name:'firma', label:'Firma del Representante Legal', type:'signature' },
+    ]},
+  ],
+};
+</script>
+
+<script type="text/babel" data-presets="react">
+/* Formulario 3: Origen de Fondos y Bienes */
+FORM_CONFIGS['origen-fondos'] = {
+  codigo: 'FO-SGR-003', titulo: 'Declaración de Origen de Fondos y Bienes', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
+  initial: () => ({
+    declarante: { nombreRazonSocial:'', tipoDocumentoNit:'', numeroDocumento:'', representanteLegal:'' },
+    origenFondos: { descripcion:'', fuentePrincipal:[], fuenteOtro:'' },
+    bienes: { poseeInmuebles:'', inmuebles:[], poseeVehiculos:'', vehiculos:[] },
+    declaracion: { aceptaDeclaracion:false },
+    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
+  }),
+  sections: [
+    { titulo:'Datos del Declarante', fields:[
+      { name:'declarante.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'declarante.tipoDocumentoNit', label:'Tipo documento / NIT', type:'text', required:true },
+      { name:'declarante.numeroDocumento', label:'Número de documento', type:'text', required:true },
+      { name:'declarante.representanteLegal', label:'Representante Legal (si es persona jurídica)', type:'text' },
+    ]},
+    { titulo:'Origen de los Fondos', fields:[
+      { name:'origenFondos.descripcion', label:'Descripción detallada del origen de los fondos, bienes y/o recursos (mínimo 100 caracteres)', type:'textarea', required:true, colSpan:2 },
+      { name:'origenFondos.fuentePrincipal', label:'Fuente principal de ingresos', type:'checkboxGroup', required:true, colSpan:2, options:['Actividad comercial','Salario','Rendimientos financieros','Herencia','Venta de bienes','Honorarios profesionales','Otro'].map(v=>({value:v,label:v})) },
+      { name:'origenFondos.fuenteOtro', label:'Especifique otra fuente', type:'text', showIf:(v)=>(getPath(v,'origenFondos.fuentePrincipal')||[]).includes('Otro') },
+    ]},
+    { titulo:'Origen de los Bienes', fields:[
+      { name:'bienes.poseeInmuebles', label:'¿Posee bienes inmuebles?', type:'radio', options:SI_NO },
+      { name:'bienes.inmuebles', label:'Bienes inmuebles', type:'dynamicList', maxItems:8, showIf:(v)=>getPath(v,'bienes.poseeInmuebles')==='si', itemFields:[
+        { name:'descripcion', label:'Descripción', type:'text' }, { name:'ubicacion', label:'Ubicación', type:'text' }, { name:'valorComercial', label:'Valor comercial estimado', type:'currency' },
+      ]},
+      { name:'bienes.poseeVehiculos', label:'¿Posee vehículos?', type:'radio', options:SI_NO },
+      { name:'bienes.vehiculos', label:'Vehículos', type:'dynamicList', maxItems:8, showIf:(v)=>getPath(v,'bienes.poseeVehiculos')==='si', itemFields:[
+        { name:'tipo', label:'Tipo', type:'text' }, { name:'marca', label:'Marca', type:'text' }, { name:'modelo', label:'Modelo', type:'text' }, { name:'placa', label:'Placa', type:'text' }, { name:'valorComercial', label:'Valor comercial estimado', type:'currency' },
+      ]},
+    ]},
+    { titulo:'Declaración Juramentada', fields:[
+      { name:'declaracion.aceptaDeclaracion', label: TEXTO_DECLARACION_ORIGEN_FONDOS, type:'checkbox', required:true, colSpan:2 },
+      { name:'firma', label:'Firma', type:'signature' },
+    ]},
+  ],
+};
+
+/* Formulario 4: Habeas Data */
+FORM_CONFIGS['habeas-data'] = {
+  codigo: 'FO-SGR-004', titulo: 'Autorización Tratamiento de Datos Personales', subtitulo: 'Habeas Data — Ley 1581 de 2012',
+  initial: () => ({
+    titular: { nombreRazonSocial:'', tipoNumeroDocumento:'', email:'', telefono:'' },
+    autorizacion: { autorizaTratamiento:false, conoceDerechos:false },
+    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
+  }),
+  sections: [
+    { titulo:'Datos del Titular', fields:[
+      { name:'titular.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'titular.tipoNumeroDocumento', label:'Tipo y número de documento', type:'text', required:true },
+      { name:'titular.telefono', label:'Teléfono', type:'text', required:true },
+      { name:'titular.email', label:'Correo electrónico', type:'email', required:true, colSpan:2 },
+    ]},
+    { titulo:'Texto de Autorización', fields:[
+      { name:'textoLegal', label:'', type:'staticText', content: TEXTO_HABEAS_DATA, colSpan:2 },
+    ]},
+    { titulo:'Autorización', fields:[
+      { name:'autorizacion.autorizaTratamiento', label:'Autorizo de manera libre, voluntaria, previa, expresa e informada a TRANSINTERNATIONAL CARGO S.A.S. para el tratamiento de mis datos personales de acuerdo con las finalidades descritas.', type:'checkbox', required:true, colSpan:2 },
+      { name:'autorizacion.conoceDerechos', label:'Declaro que he sido informado(a) de los derechos que me asisten como titular de los datos personales consagrados en el artículo 8 de la Ley 1581 de 2012.', type:'checkbox', required:true, colSpan:2 },
+      { name:'firma', label:'Firma', type:'signature' },
+    ]},
+  ],
+};
+</script>
+
+<script type="text/babel" data-presets="react">
+/* Formulario 5: Acuerdo de Seguridad BASC */
+const compromisoFields = COMPROMISOS_SEGURIDAD_BASC.map((texto, i) => ({ name:`compromisos.c${i}`, label:texto, type:'checkbox', required:true, colSpan:2 }));
+
+FORM_CONFIGS['acuerdo-seguridad'] = {
+  codigo: 'FO-SGR-005', titulo: 'Acuerdo de Seguridad BASC', subtitulo: 'Compromisos de seguridad en la cadena de suministro',
+  initial: () => ({
+    contraparte: { nombreRazonSocial:'', nitCc:'', representanteLegal:'', direccion:'', ciudad:'', telefono:'', email:'', actividadEconomica:'', productosServicios:'' },
+    compromisos: Object.fromEntries(COMPROMISOS_SEGURIDAD_BASC.map((_, i) => [`c${i}`, false])),
+    declaracion: { aceptaCondiciones:false },
+    firma: { nombre:'', documento:'', cargo:'', fecha: hoyISO(), ciudad:'' },
+  }),
+  sections: [
+    { titulo:'Datos de la Contraparte', fields:[
+      { name:'contraparte.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'contraparte.nitCc', label:'NIT / CC', type:'text', required:true },
+      { name:'contraparte.representanteLegal', label:'Representante Legal', type:'text', required:true },
+      { name:'contraparte.direccion', label:'Dirección', type:'text', required:true },
+      { name:'contraparte.ciudad', label:'Ciudad', type:'text', required:true },
+      { name:'contraparte.telefono', label:'Teléfono', type:'text', required:true },
+      { name:'contraparte.email', label:'Correo electrónico', type:'email', required:true },
+      { name:'contraparte.actividadEconomica', label:'Actividad económica', type:'text', required:true },
+      { name:'contraparte.productosServicios', label:'Productos/servicios que provee o recibe', type:'textarea', colSpan:2 },
+    ]},
+    { titulo:'Compromisos de Seguridad', fields: compromisoFields },
+    { titulo:'Firma', fields:[
+      { name:'declaracion.aceptaCondiciones', label:'Declaro conocer y aceptar las condiciones de seguridad establecidas por TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
+      { name:'firma.nombre', label:'Nombre completo', type:'text', required:true },
+      { name:'firma.documento', label:'Documento', type:'text', required:true },
+      { name:'firma.cargo', label:'Cargo', type:'text' },
+      { name:'firma.fecha', label:'Fecha', type:'date', required:true },
+      { name:'firma.ciudad', label:'Ciudad', type:'text', required:true },
+    ]},
+  ],
+};
+
+/* Formulario 6: Visita Comercial / Seguridad */
+FORM_CONFIGS['visita-seguridad'] = {
+  codigo: 'FO-SGR-006', titulo: 'Visita Comercial / Visita de Seguridad', subtitulo: 'Cuestionario de verificación de seguridad',
+  initial: () => ({
+    empresa: { razonSocial:'', nit:'', direccion:'', ciudad:'', personaAtiende:'', cargo:'', fechaVisita: hoyISO() },
+    cuestionario: PREGUNTAS_VISITA_SEGURIDAD.map((pregunta) => ({ pregunta, respuesta:'', observacion:'' })),
+    observaciones: { observacionesGenerales:'', concepto:'', recomendaciones:'' },
+    firmaVisitador: { nombre:'', cargo:'', documento:'', fecha: hoyISO() },
+    firmaAtiende: { nombre:'', cargo:'', documento:'', fecha: hoyISO() },
+  }),
+  sections: [
+    { titulo:'Datos de la Empresa Visitada', fields:[
+      { name:'empresa.razonSocial', label:'Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'empresa.nit', label:'NIT', type:'text', required:true },
+      { name:'empresa.direccion', label:'Dirección de las instalaciones visitadas', type:'text', required:true },
+      { name:'empresa.ciudad', label:'Ciudad', type:'text', required:true },
+      { name:'empresa.personaAtiende', label:'Persona que atiende la visita', type:'text', required:true },
+      { name:'empresa.cargo', label:'Cargo', type:'text' },
+      { name:'empresa.fechaVisita', label:'Fecha de la visita', type:'date', required:true },
+    ]},
+    { titulo:'Cuestionario de Seguridad', fields:[
+      { name:'cuestionario', label:'', type:'matrix', preguntas: PREGUNTAS_VISITA_SEGURIDAD, colSpan:2 },
+    ]},
+    { titulo:'Observaciones Generales', fields:[
+      { name:'observaciones.observacionesGenerales', label:'Observaciones adicionales del visitador', type:'textarea', colSpan:2 },
+      { name:'observaciones.concepto', label:'Concepto de la visita', type:'select', required:true, options:['FAVORABLE','FAVORABLE CON OBSERVACIONES','NO FAVORABLE'].map(v=>({value:v,label:v})) },
+      { name:'observaciones.recomendaciones', label:'Recomendaciones', type:'textarea', colSpan:2 },
+    ]},
+    { titulo:'Firmas', fields:[
+      { name:'firmaVisitador.nombre', label:'Nombre de quien realiza la visita', type:'text', required:true },
+      { name:'firmaVisitador.cargo', label:'Cargo', type:'text' },
+      { name:'firmaVisitador.documento', label:'Documento', type:'text', required:true },
+      { name:'firmaVisitador.fecha', label:'Fecha', type:'date', required:true },
+      { name:'firmaAtiende.nombre', label:'Nombre de quien atiende la visita', type:'text', required:true },
+      { name:'firmaAtiende.cargo', label:'Cargo', type:'text' },
+      { name:'firmaAtiende.documento', label:'Documento', type:'text', required:true },
+      { name:'firmaAtiende.fecha', label:'Fecha', type:'date', required:true },
+    ]},
+  ],
+};
+
+/* Formulario 7: Carta de Responsabilidad / Mandato Comercial */
+FORM_CONFIGS['carta-responsabilidad'] = {
+  codigo: 'FO-SGR-007', titulo: 'Carta de Responsabilidad / Mandato Comercial', subtitulo: 'Declaración de responsabilidad como agente de carga internacional',
+  initial: () => ({
+    mandante: { nombreRazonSocial:'', nitCc:'', representanteLegal:'', tipoNumeroDocumentoRL:'', direccion:'', ciudad:'', telefono:'', email:'' },
+    mandato: { tipoOperacion:[], tipoCarga:'', productos:'', origenFrecuente:'', destinoFrecuente:'', incoterm:'' },
+    declaracion: { declaraProcedenciaLicita:false, comprometeInformacion:false, autorizaMandato:false },
+    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
+  }),
+  sections: [
+    { titulo:'Datos del Mandante', fields:[
+      { name:'mandante.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
+      { name:'mandante.nitCc', label:'NIT / CC', type:'text', required:true },
+      { name:'mandante.representanteLegal', label:'Representante Legal', type:'text', required:true },
+      { name:'mandante.tipoNumeroDocumentoRL', label:'Tipo y número de documento del R.L.', type:'text', required:true },
+      { name:'mandante.direccion', label:'Dirección', type:'text', required:true },
+      { name:'mandante.ciudad', label:'Ciudad', type:'text', required:true },
+      { name:'mandante.telefono', label:'Teléfono', type:'text', required:true },
+      { name:'mandante.email', label:'Correo electrónico', type:'email', required:true },
+    ]},
+    { titulo:'Descripción del Mandato', fields:[
+      { name:'mandato.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', required:true, options:[{value:'Importación',label:'Importación'},{value:'Exportación',label:'Exportación'},{value:'Ambas',label:'Ambas'}] },
+      { name:'mandato.tipoCarga', label:'Tipo de carga', type:'select', required:true, options:['Carga general','Carga suelta','Contenedor FCL','Contenedor LCL','Carga aérea','Carga proyecto','Otra'].map(v=>({value:v,label:v})) },
+      { name:'mandato.productos', label:'Productos a manejar', type:'textarea', required:true, colSpan:2 },
+      { name:'mandato.origenFrecuente', label:'Origen frecuente de la mercancía', type:'text' },
+      { name:'mandato.destinoFrecuente', label:'Destino frecuente de la mercancía', type:'text' },
+      { name:'mandato.incoterm', label:'Incoterm habitual', type:'select', required:true, options:['EXW','FCA','FAS','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'].map(v=>({value:v,label:v})) },
+    ]},
+    { titulo:'Declaración de Responsabilidad', fields:[
+      { name:'declaracion.declaraProcedenciaLicita', label:'Declaro que la mercancía que será gestionada por TRANSINTERNATIONAL CARGO S.A.S. en mi nombre es de procedencia lícita, que conozco su contenido y que asumo plena responsabilidad sobre la veracidad de la información declarada en los documentos de transporte.', type:'checkbox', required:true, colSpan:2 },
+      { name:'declaracion.comprometeInformacion', label:'Me comprometo a proporcionar información completa, veraz y oportuna sobre la naturaleza, contenido, peso y valor de la mercancía.', type:'checkbox', required:true, colSpan:2 },
+      { name:'declaracion.autorizaMandato', label:'Autorizo a TRANSINTERNATIONAL CARGO S.A.S. a actuar como mi agente de carga internacional para las operaciones indicadas.', type:'checkbox', required:true, colSpan:2 },
+      { name:'firma', label:'Firma', type:'signature' },
+    ]},
+  ],
+};
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   6. GENERADOR DE PDF (jsPDF) — marca TI Cargo
+   ============================================================ */
+function construirSeccionesPDF(slug, d) {
+  const SI = (v) => (v === 'si' ? 'Sí' : v === 'no' ? 'No' : '—');
+  if (slug === 'persona-natural') {
+    const patrimonio = (d.financiera.totalActivos||0) - (d.financiera.totalPasivos||0);
+    return [
+      { titulo:'1. INFORMACIÓN GENERAL', columns:2, rows:[
+        { label:'Tipo de vinculación', value: d.general.tipoVinculacion==='nueva'?'Vinculación nueva':'Actualización anual' },
+        { label:'Tipo de contraparte', value: d.general.tipoContraparte },
+        { label:'Fecha de diligenciamiento', value: formatFechaCorta(d.general.fechaDiligenciamiento) },
+      ]},
+      { titulo:'2. DATOS PERSONALES', columns:2, rows:[
+        { label:'Primer apellido', value:d.personales.primerApellido }, { label:'Segundo apellido', value:d.personales.segundoApellido },
+        { label:'Nombres', value:d.personales.nombres }, { label:'Tipo / N° documento', value:`${d.personales.tipoDocumento} ${d.personales.numeroDocumento}` },
+        { label:'Fecha / lugar expedición', value:`${formatFechaCorta(d.personales.fechaExpedicion)} — ${d.personales.lugarExpedicion}` },
+        { label:'Fecha / lugar nacimiento', value:`${formatFechaCorta(d.personales.fechaNacimiento)} — ${d.personales.lugarNacimiento}` },
+        { label:'Nacionalidad', value:d.personales.nacionalidad }, { label:'Género', value:d.personales.genero }, { label:'Estado civil', value:d.personales.estadoCivil },
+      ]},
+      { titulo:'3. INFORMACIÓN DE CONTACTO', columns:2, rows:[
+        { label:'Dirección residencia', value:d.contacto.direccionResidencia }, { label:'Ciudad / Departamento', value:`${d.contacto.ciudad} / ${d.contacto.departamento}` },
+        { label:'País', value:d.contacto.pais }, { label:'Teléfono fijo', value:d.contacto.telefonoFijo }, { label:'Celular', value:d.contacto.celular },
+        { label:'Correo electrónico', value:d.contacto.email }, { label:'Dirección correspondencia', value:d.contacto.direccionCorrespondencia },
+      ]},
+      { titulo:'4. INFORMACIÓN LABORAL / ACTIVIDAD ECONÓMICA', columns:2, rows:[
+        { label:'Actividad económica', value:d.laboral.actividadEconomica }, { label:'Profesión / Ocupación', value:d.laboral.profesion },
+        { label:'Código CIIU', value:d.laboral.codigoCiiu }, { label:'Descripción actividad', value:d.laboral.descripcionActividad },
+        { label:'Empresa', value:d.laboral.empresa }, { label:'Cargo', value:d.laboral.cargo },
+        { label:'Dirección empresa', value:d.laboral.direccionEmpresa }, { label:'Ciudad / Tel. empresa', value:`${d.laboral.ciudadEmpresa||''} ${d.laboral.telefonoEmpresa||''}`.trim() },
+      ]},
+      { titulo:'5. INFORMACIÓN FINANCIERA (COP)', columns:2, rows:[
+        { label:'Ingresos mensuales', value:formatCOP(d.financiera.ingresosMensuales) }, { label:'Egresos mensuales', value:formatCOP(d.financiera.egresosMensuales) },
+        { label:'Otros ingresos', value:formatCOP(d.financiera.otrosIngresos) }, { label:'Detalle otros ingresos', value:d.financiera.detalleOtrosIngresos },
+        { label:'Total activos', value:formatCOP(d.financiera.totalActivos) }, { label:'Total pasivos', value:formatCOP(d.financiera.totalPasivos) },
+        { label:'Total patrimonio', value:formatCOP(patrimonio) },
+      ]},
+      { titulo:'6. OPERACIONES INTERNACIONALES', columns:2, rows:[
+        { label:'¿Opera en moneda extranjera?', value:SI(d.internacional.operaMonedaExtranjera) }, { label:'Tipo de operación', value:(d.internacional.tipoOperacion||[]).join(', ') },
+        { label:'¿Productos en el exterior?', value:SI(d.internacional.poseeProductosExterior) }, { label:'Producto / Entidad', value:`${d.internacional.tipoProducto||''} ${d.internacional.entidad||''}`.trim() },
+        { label:'País / Ciudad', value:`${d.internacional.paisProducto||''} ${d.internacional.ciudadProducto||''}`.trim() }, { label:'Monto', value:formatCOP(d.internacional.montoProducto) },
+      ]},
+      { titulo:'7. PERSONAS EXPUESTAS POLÍTICAMENTE (PEP)', columns:2, rows:[
+        { label:'¿Es PEP?', value:SI(d.pep.esPep) }, { label:'Cargo PEP', value:d.pep.cargoPep },
+        { label:'Vinculación / Desvinculación', value:`${formatFechaCorta(d.pep.fechaVinculacionPep)} — ${formatFechaCorta(d.pep.fechaDesvinculacionPep)}` },
+        { label:'¿Vínculo con una PEP?', value:SI(d.pep.tieneVinculoPep) }, { label:'Nombre / Parentesco', value:`${d.pep.nombrePep||''} ${d.pep.parentescoPep?'('+d.pep.parentescoPep+')':''}`.trim() },
+        { label:'¿Maneja recursos públicos?', value:SI(d.pep.manejaRecursosPublicos) }, { label:'¿Reconocimiento público?', value:SI(d.pep.reconocimientoPublico) }, { label:'¿Ejerce poder público?', value:SI(d.pep.ejercePoderPublico) },
+      ]},
+      { titulo:'8. DECLARACIONES Y AUTORIZACIONES', paragraphs:[
+        `Declaración juramentada: ${d.declaraciones.declaracionJuramentada?'ACEPTADA':'NO ACEPTADA'}`,
+        `Autorización de consulta y reporte: ${d.declaraciones.autorizacionConsulta?'ACEPTADA':'NO ACEPTADA'}`,
+        `Autorización tratamiento de datos personales: ${d.declaraciones.autorizacionDatos?'ACEPTADA':'NO ACEPTADA'}`,
+      ]},
+      { titulo:'FIRMA', columns:2, rows:[
+        { label:'Nombre del firmante', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento },
+        { label:'Fecha de firma', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad de firma', value:d.firma.ciudad },
+      ]},
+    ];
+  }
+
+  if (slug === 'persona-juridica') {
+    const patrimonio = (d.financiera.totalActivos||0) - (d.financiera.totalPasivos||0);
+    const secciones = [
+      { titulo:'1. INFORMACIÓN GENERAL', columns:2, rows:[
+        { label:'Tipo de vinculación', value: d.general.tipoVinculacion==='nueva'?'Vinculación nueva':'Actualización anual' },
+        { label:'Tipo de contraparte', value: d.general.tipoContraparte }, { label:'Fecha de diligenciamiento', value: formatFechaCorta(d.general.fechaDiligenciamiento) },
+      ]},
+      { titulo:'2. DATOS DE LA PERSONA JURÍDICA', columns:2, rows:[
+        { label:'Razón social', value:d.datos.razonSocial }, { label:'Nombre comercial', value:d.datos.nombreComercial }, { label:'NIT', value:d.datos.nit },
+        { label:'Tipo de sociedad', value:d.datos.tipoSociedad }, { label:'Fecha / lugar constitución', value:`${formatFechaCorta(d.datos.fechaConstitucion)} — ${d.datos.lugarConstitucion}` },
+        { label:'Código CIIU', value:d.datos.codigoCiiu }, { label:'Objeto social', value:d.datos.objetoSocial }, { label:'Descripción actividad', value:d.datos.descripcionActividad },
+      ]},
+      { titulo:'3. INFORMACIÓN DE CONTACTO', columns:2, rows:[
+        { label:'Dirección principal', value:d.contacto.direccionPrincipal }, { label:'Ciudad / Departamento', value:`${d.contacto.ciudad} / ${d.contacto.departamento}` },
+        { label:'País', value:d.contacto.pais }, { label:'Teléfono', value:d.contacto.telefono }, { label:'Sitio web', value:d.contacto.sitioWeb }, { label:'Correo corporativo', value:d.contacto.email },
+      ]},
+    ];
+    (d.representantes||[]).forEach((r,i) => secciones.push({ titulo:`4. REPRESENTANTE LEGAL ${i+1}`, columns:2, rows:[
+      { label:'Nombres', value:r.nombres }, { label:'Tipo / N° documento', value:`${r.tipoDocumento||''} ${r.numeroDocumento||''}`.trim() },
+      { label:'Expedición', value:`${formatFechaCorta(r.fechaExpedicion)} — ${r.lugarExpedicion||''}` }, { label:'¿Es PEP?', value:SI(r.esPep) }, { label:'Cargo / Entidad PEP', value:`${r.cargoPep||''} ${r.entidadPep||''}`.trim() },
+    ]}));
+    if ((d.socios||[]).length) secciones.push({ titulo:'5. COMPOSICIÓN ACCIONARIA (≥ 5%)', rows:(d.socios||[]).map((s,i)=>({ label:`Socio ${i+1}`, value:`${s.nombreRazonSocial||''} — ${s.tipoDocumento||''} ${s.numeroDocumento||''} — ${s.porcentajeParticipacion||0}% — PEP: ${SI(s.esPep)} — ${s.paisResidencia||''}` })) });
+    if ((d.juntaDirectiva||[]).length) secciones.push({ titulo:'6. JUNTA DIRECTIVA', rows:(d.juntaDirectiva||[]).map((j,i)=>({ label:`Miembro ${i+1} — ${j.cargoJunta||''}`, value:`${j.nombres||''} — Doc: ${j.tipoDocumento||''} ${j.numeroDocumento||''} — PEP: ${SI(j.esPep)}` })) });
+    secciones.push({ titulo:'7. INFORMACIÓN FINANCIERA (COP)', columns:2, rows:[
+      { label:'Ingresos operacionales', value:formatCOP(d.financiera.ingresosOperacionales) }, { label:'Total egresos', value:formatCOP(d.financiera.totalEgresos) },
+      { label:'Total activos', value:formatCOP(d.financiera.totalActivos) }, { label:'Total pasivos', value:formatCOP(d.financiera.totalPasivos) },
+      { label:'Total patrimonio', value:formatCOP(patrimonio) }, { label:'Capital social', value:formatCOP(d.financiera.capitalSocial) },
+    ]});
+    secciones.push({ titulo:'8. OPERACIONES INTERNACIONALES', columns:2, rows:[
+      { label:'¿Opera en moneda extranjera?', value:SI(d.internacional.operaMonedaExtranjera) }, { label:'Tipo de operación', value:(d.internacional.tipoOperacion||[]).join(', ') },
+      { label:'¿Productos en el exterior?', value:SI(d.internacional.poseeProductosExterior) }, { label:'Producto / Entidad / País', value:`${d.internacional.tipoProducto||''} ${d.internacional.entidad||''} ${d.internacional.paisProducto||''}`.trim() },
+    ]});
+    secciones.push({ titulo:'9. INFORMACIÓN TRIBUTARIA', columns:2, rows:[
+      { label:'Régimen tributario', value:d.tributaria.regimenIva }, { label:'Gran contribuyente', value:SI(d.tributaria.granContribuyente) },
+      { label:'Autorretenedor', value:SI(d.tributaria.autorretenedor) }, { label:'Agente de retención', value:SI(d.tributaria.agenteRetencion) },
+    ]});
+    if ((d.referencias||[]).length) secciones.push({ titulo:'10. REFERENCIAS', rows:(d.referencias||[]).map((r,i)=>({ label:`Referencia ${i+1} (${r.tipo||''})`, value:`${r.nombreEntidad||''} — ${r.contacto||''} — ${r.telefono||''} — ${r.ciudad||''}` })) });
+    secciones.push({ titulo:'11. DECLARACIONES Y AUTORIZACIONES', paragraphs:[
+      `Declaración juramentada: ${d.declaraciones.declaracionJuramentada?'ACEPTADA':'NO ACEPTADA'}`, `Autorización de consulta y reporte: ${d.declaraciones.autorizacionConsulta?'ACEPTADA':'NO ACEPTADA'}`, `Autorización tratamiento de datos personales: ${d.declaraciones.autorizacionDatos?'ACEPTADA':'NO ACEPTADA'}`,
+    ]});
+    secciones.push({ titulo:'FIRMA DEL REPRESENTANTE LEGAL', columns:2, rows:[
+      { label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha de firma', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad de firma', value:d.firma.ciudad },
+    ]});
+    return secciones;
+  }
+
+  if (slug === 'origen-fondos') {
+    const secciones = [
+      { titulo:'1. DATOS DEL DECLARANTE', columns:2, rows:[
+        { label:'Nombre / Razón Social', value:d.declarante.nombreRazonSocial }, { label:'Tipo documento / NIT', value:d.declarante.tipoDocumentoNit },
+        { label:'Número de documento', value:d.declarante.numeroDocumento }, { label:'Representante Legal', value:d.declarante.representanteLegal },
+      ]},
+      { titulo:'2. ORIGEN DE LOS FONDOS', paragraphs:[d.origenFondos.descripcion], rows:[
+        { label:'Fuente principal de ingresos', value:(d.origenFondos.fuentePrincipal||[]).join(', ') + (d.origenFondos.fuenteOtro?` (${d.origenFondos.fuenteOtro})`:'') },
+      ]},
+    ];
+    if (d.bienes.poseeInmuebles==='si' && (d.bienes.inmuebles||[]).length) secciones.push({ titulo:'3. BIENES INMUEBLES', rows:(d.bienes.inmuebles||[]).map((i,idx)=>({ label:`Inmueble ${idx+1}`, value:`${i.descripcion||''} — ${i.ubicacion||''} — ${formatCOP(Number(i.valorComercial)||0)}` })) });
+    if (d.bienes.poseeVehiculos==='si' && (d.bienes.vehiculos||[]).length) secciones.push({ titulo:'4. VEHÍCULOS', rows:(d.bienes.vehiculos||[]).map((v,idx)=>({ label:`Vehículo ${idx+1}`, value:`${v.tipo||''} ${v.marca||''} ${v.modelo||''} — Placa ${v.placa||''} — ${formatCOP(Number(v.valorComercial)||0)}` })) });
+    secciones.push({ titulo:'DECLARACIÓN JURAMENTADA', paragraphs:[`Estado de la declaración: ${d.declaracion.aceptaDeclaracion?'ACEPTADA':'NO ACEPTADA'}`] });
+    secciones.push({ titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] });
+    return secciones;
+  }
+
+  if (slug === 'habeas-data') {
+    return [
+      { titulo:'1. DATOS DEL TITULAR', columns:2, rows:[
+        { label:'Nombre / Razón Social', value:d.titular.nombreRazonSocial }, { label:'Tipo y número de documento', value:d.titular.tipoNumeroDocumento },
+        { label:'Correo electrónico', value:d.titular.email }, { label:'Teléfono', value:d.titular.telefono },
+      ]},
+      { titulo:'2. TEXTO DE AUTORIZACIÓN', paragraphs: TEXTO_HABEAS_DATA.split('\n\n') },
+      { titulo:'3. AUTORIZACIÓN', paragraphs:[
+        `Autorización de tratamiento de datos: ${d.autorizacion.autorizaTratamiento?'ACEPTADA':'NO ACEPTADA'}`, `Conocimiento de derechos (Art. 8, Ley 1581/2012): ${d.autorizacion.conoceDerechos?'DECLARADO':'NO DECLARADO'}`,
+      ]},
+      { titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] },
+    ];
+  }
+
+  if (slug === 'acuerdo-seguridad') {
+    return [
+      { titulo:'1. DATOS DE LA CONTRAPARTE', columns:2, rows:[
+        { label:'Nombre / Razón Social', value:d.contraparte.nombreRazonSocial }, { label:'NIT / CC', value:d.contraparte.nitCc }, { label:'Representante Legal', value:d.contraparte.representanteLegal },
+        { label:'Dirección', value:d.contraparte.direccion }, { label:'Ciudad', value:d.contraparte.ciudad }, { label:'Teléfono', value:d.contraparte.telefono },
+        { label:'Correo electrónico', value:d.contraparte.email }, { label:'Actividad económica', value:d.contraparte.actividadEconomica }, { label:'Productos/servicios', value:d.contraparte.productosServicios },
+      ]},
+      { titulo:'2. COMPROMISOS DE SEGURIDAD', rows: COMPROMISOS_SEGURIDAD_BASC.map((texto,i)=>({ label:`${i+1}.`, value: (d.compromisos[`c${i}`]?'ACEPTADO — ':'NO ACEPTADO — ') + texto })) },
+      { titulo:'3. FIRMA', columns:2, rows:[
+        { label:'Declaración de aceptación', value:d.declaracion.aceptaCondiciones?'ACEPTADA':'NO ACEPTADA' }, { label:'Nombre completo', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento },
+        { label:'Cargo', value:d.firma.cargo }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad },
+      ]},
+    ];
+  }
+
+  if (slug === 'visita-seguridad') {
+    const RESP = { si:'Sí', no:'No', na:'N.A.' };
+    return [
+      { titulo:'1. DATOS DE LA EMPRESA VISITADA', columns:2, rows:[
+        { label:'Razón Social', value:d.empresa.razonSocial }, { label:'NIT', value:d.empresa.nit }, { label:'Dirección', value:d.empresa.direccion },
+        { label:'Ciudad', value:d.empresa.ciudad }, { label:'Persona que atiende', value:d.empresa.personaAtiende }, { label:'Cargo', value:d.empresa.cargo }, { label:'Fecha de la visita', value:formatFechaCorta(d.empresa.fechaVisita) },
+      ]},
+      { titulo:'2. CUESTIONARIO DE SEGURIDAD', rows:d.cuestionario.map((p,i)=>({ label:`${i+1}. ${p.pregunta}`, value:`${RESP[p.respuesta]||'Sin responder'}${p.observacion?' — '+p.observacion:''}` })) },
+      { titulo:'3. OBSERVACIONES GENERALES', paragraphs:[ d.observaciones.observacionesGenerales || 'Sin observaciones adicionales.', `Concepto de la visita: ${d.observaciones.concepto}`, d.observaciones.recomendaciones?`Recomendaciones: ${d.observaciones.recomendaciones}`:'' ].filter(Boolean) },
+      { titulo:'4. FIRMAS', columns:2, rows:[
+        { label:'Visitador — Nombre', value:d.firmaVisitador.nombre }, { label:'Visitador — Cargo/Doc.', value:`${d.firmaVisitador.cargo||''} / ${d.firmaVisitador.documento}` }, { label:'Visitador — Fecha', value:formatFechaCorta(d.firmaVisitador.fecha) },
+        { label:'Atiende — Nombre', value:d.firmaAtiende.nombre }, { label:'Atiende — Cargo/Doc.', value:`${d.firmaAtiende.cargo||''} / ${d.firmaAtiende.documento}` }, { label:'Atiende — Fecha', value:formatFechaCorta(d.firmaAtiende.fecha) },
+      ]},
+    ];
+  }
+
+  if (slug === 'carta-responsabilidad') {
+    return [
+      { titulo:'1. DATOS DEL MANDANTE', columns:2, rows:[
+        { label:'Nombre / Razón Social', value:d.mandante.nombreRazonSocial }, { label:'NIT / CC', value:d.mandante.nitCc }, { label:'Representante Legal', value:d.mandante.representanteLegal },
+        { label:'Documento R.L.', value:d.mandante.tipoNumeroDocumentoRL }, { label:'Dirección', value:d.mandante.direccion }, { label:'Ciudad', value:d.mandante.ciudad },
+        { label:'Teléfono', value:d.mandante.telefono }, { label:'Correo electrónico', value:d.mandante.email },
+      ]},
+      { titulo:'2. DESCRIPCIÓN DEL MANDATO', columns:2, rows:[
+        { label:'Tipo de operación', value:(d.mandato.tipoOperacion||[]).join(', ') }, { label:'Tipo de carga', value:d.mandato.tipoCarga }, { label:'Productos a manejar', value:d.mandato.productos },
+        { label:'Origen frecuente', value:d.mandato.origenFrecuente }, { label:'Destino frecuente', value:d.mandato.destinoFrecuente }, { label:'Incoterm habitual', value:d.mandato.incoterm },
+      ]},
+      { titulo:'3. DECLARACIÓN DE RESPONSABILIDAD', paragraphs:[
+        `Declaración de procedencia lícita: ${d.declaracion.declaraProcedenciaLicita?'ACEPTADA':'NO ACEPTADA'}`, `Compromiso de información veraz: ${d.declaracion.comprometeInformacion?'ACEPTADO':'NO ACEPTADO'}`, `Autorización de mandato como agente de carga: ${d.declaracion.autorizaMandato?'ACEPTADA':'NO ACEPTADA'}`,
+      ]},
+      { titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] },
+    ];
+  }
+
+  return [];
+}
+
+function generarPdf(slug, datos, descargar) {
+  const config = FORM_CONFIGS[slug];
+  const secciones = construirSeccionesPDF(slug, datos);
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margenX = 12;
+  const anchoContenido = pageWidth - margenX * 2;
+  let y = 0;
+  let primeraPagina = true;
+
+  function dibujarBandaSuperior() {
+    doc.setFillColor(...ROJO);
+    doc.rect(0, 0, pageWidth, primeraPagina ? 16 : 8, 'F');
+    doc.setTextColor(255,255,255);
+    if (primeraPagina) {
+      doc.setFontSize(11); doc.setFont(undefined,'bold');
+      doc.text(EMPRESA.razonSocial, margenX, 7);
+      doc.setFontSize(7.5); doc.setFont(undefined,'normal');
+      doc.text(EMPRESA.actividad, margenX, 12);
+      doc.setFontSize(7.5);
+      doc.text(`${config.codigo} · V.01`, pageWidth - margenX, 7, { align:'right' });
+      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CO')}`, pageWidth - margenX, 12, { align:'right' });
+    } else {
+      doc.setFontSize(7); doc.text(`${EMPRESA.razonSocial} — continuación — ${config.codigo}`, margenX, 5.5);
+    }
+  }
+
+  function nuevaPagina() {
+    doc.addPage();
+    primeraPagina = false;
+    dibujarBandaSuperior();
+    y = 14;
+  }
+
+  function asegurarEspacio(alto) {
+    if (y + alto > pageHeight - 18) nuevaPagina();
+  }
+
+  // Página 1: banda + título
+  dibujarBandaSuperior();
+  y = 22;
+  doc.setTextColor(...NEGRO); doc.setFontSize(12.5); doc.setFont(undefined,'bold');
+  doc.text(config.titulo, pageWidth/2, y, { align:'center', maxWidth: anchoContenido });
+  y += 5.5;
+  doc.setFontSize(9); doc.setTextColor(...ROJO);
+  doc.text(config.subtitulo || '', pageWidth/2, y, { align:'center' });
+  y += 7;
+
+  secciones.forEach((seccion) => {
+    asegurarEspacio(9);
+    doc.setFillColor(...ROJO);
+    doc.rect(margenX, y, anchoContenido, 6.5, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(9.5); doc.setFont(undefined,'bold');
+    doc.text(seccion.titulo, margenX + 2, y + 4.5);
+    doc.setFont(undefined,'normal');
+    y += 6.5;
+
+    if (seccion.paragraphs) {
+      seccion.paragraphs.forEach((p) => {
+        if (!p) return;
+        const lineas = doc.splitTextToSize(p, anchoContenido - 6);
+        const alto = lineas.length * 4.2 + 4;
+        asegurarEspacio(alto);
+        doc.setFillColor(...GRIS_CLARO);
+        doc.rect(margenX, y, anchoContenido, alto, 'F');
+        doc.setFontSize(8); doc.setTextColor(...NEGRO);
+        doc.text(lineas, margenX + 3, y + 5);
+        y += alto;
+      });
+    }
+
+    if (seccion.rows) {
+      const columnas = seccion.columns || 1;
+      if (columnas === 2) {
+        for (let i = 0; i < seccion.rows.length; i += 2) {
+          const alto = 5.8;
+          asegurarEspacio(alto);
+          const par = [seccion.rows[i], seccion.rows[i+1]];
+          par.forEach((row, idx) => {
+            if (!row) return;
+            const x = margenX + idx * (anchoContenido/2);
+            const w = anchoContenido/2;
+            doc.setFillColor(...(((i/2)%2===0)?[248,248,248]:[255,255,255]));
+            doc.rect(x, y, w, alto, 'F');
+            doc.setFontSize(7); doc.setTextColor(...GRIS);
+            doc.text(String(row.label), x + 2, y + 2.6);
+            doc.setFontSize(7.8); doc.setTextColor(...NEGRO);
+            const valorTexto = doc.splitTextToSize(String(row.value || '—'), w - 4)[0] || '';
+            doc.text(valorTexto, x + 2, y + 5.2);
+          });
+          doc.setDrawColor(...GRIS_BORDE);
+          doc.rect(margenX, y, anchoContenido, alto);
+          doc.line(margenX + anchoContenido/2, y, margenX + anchoContenido/2, y + alto);
+          y += alto;
+        }
+      } else {
+        seccion.rows.forEach((row, idx) => {
+          const lineasValor = doc.splitTextToSize(String(row.value || '—'), anchoContenido - 6);
+          const alto = Math.max(5.5, lineasValor.length * 3.6 + 3.5);
+          asegurarEspacio(alto);
+          doc.setFillColor(...(idx % 2 === 0 ? [248,248,248] : [255,255,255]));
+          doc.rect(margenX, y, anchoContenido, alto, 'F');
+          doc.setFontSize(7.3); doc.setTextColor(...GRIS); doc.setFont(undefined,'bold');
+          doc.text(String(row.label), margenX + 2, y + 3.4, { maxWidth: anchoContenido - 4 });
+          doc.setFont(undefined,'normal'); doc.setFontSize(7.6); doc.setTextColor(...NEGRO);
+          doc.text(lineasValor, margenX + 2, y + (row.label ? 3.4 + 3.4 : 3.4));
+          y += alto;
+        });
+      }
+      doc.setDrawColor(...GRIS_BORDE);
+    }
+    y += 3;
+  });
+
+  // Pie de página en todas las páginas
+  const totalPaginas = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPaginas; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...ROJO); doc.setLineWidth(0.3);
+    doc.line(margenX, pageHeight - 12, pageWidth - margenX, pageHeight - 12);
+    doc.setFontSize(6.5); doc.setTextColor(...NEGRO);
+    doc.text(`${EMPRESA.razonSocial} | NIT ${EMPRESA.nit} | ${EMPRESA.direccion}`, margenX, pageHeight - 8);
+    doc.text(`Pág ${i} de ${totalPaginas}`, pageWidth - margenX, pageHeight - 8, { align:'right' });
+    doc.setFontSize(6); doc.setTextColor(120,120,120);
+    doc.text('Este documento es confidencial y de uso exclusivo para el SAGRILAFT de TI Cargo', pageWidth/2, pageHeight - 4, { align:'center' });
+  }
+
+  if (descargar) {
+    doc.save(`${config.codigo}_${slug}_${new Date().getTime()}.pdf`);
+    return null;
+  }
+  return doc.output('datauristring');
+}
+</script>
+
+<script type="text/babel" data-presets="react">
+/* ============================================================
+   7. VALIDACIÓN GENÉRICA POR SECCIÓN
+   ============================================================ */
+function validarSeccion(fields, datos) {
+  for (const f of fields) {
+    if (f.showIf && !f.showIf(datos)) continue;
+    if (f.type === 'dynamicList' || f.type === 'matrix' || f.type === 'staticText' || f.type === 'signature') continue;
+    if (!f.required) continue;
+    const val = getPath(datos, f.name);
+    if (f.type === 'checkbox' && !val) return `Debe aceptar: "${f.label.slice(0, 70)}..."`;
+    if (f.type === 'checkboxGroup' && (!val || val.length === 0)) return `Seleccione al menos una opción en "${f.label}"`;
+    if (f.type === 'currency' && (val === undefined || val === null)) return `Complete el campo "${f.label}"`;
+    if (['text','email','url','textarea','date','select','radio','number'].includes(f.type) && (val === undefined || val === null || val === '')) {
+      return `Complete el campo "${f.label}"`;
+    }
+  }
+  return null;
+}
+
+/* ============================================================
+   8. PÁGINA DE FORMULARIO (genérica para los 7)
+   ============================================================ */
+function FormPage({ slug, onVolver }) {
+  const config = FORM_CONFIGS[slug];
+  const [datos, setDatos] = useState(() => config.initial());
+  const [seccionActiva, setSeccionActiva] = useState(0);
+  const [error, setError] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    const borrador = leerBorrador(config.codigo);
+    if (borrador) {
+      const continuar = window.confirm(`Encontramos un borrador guardado el ${new Date(borrador.savedAt).toLocaleString('es-CO')}. ¿Desea continuar con ese borrador?`);
+      if (continuar) setDatos(borrador.data);
+    }
+    // eslint-disable-next-line
+  }, [slug]);
+
+  function mostrarToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 3000);
+  }
+
+  function set(path, value) {
+    setDatos((prev) => setPath(prev, path, value));
+  }
+
+  function guardarBorradorActual() {
+    guardarBorrador(config.codigo, datos);
+    mostrarToast('Borrador guardado correctamente.');
+  }
+
+  function validarTodo() {
+    for (const s of config.sections) {
+      const msg = validarSeccion(s.fields, datos);
+      if (msg) return msg;
+    }
+    return null;
+  }
+
+  function irSiguiente() {
+    const msg = validarSeccion(config.sections[seccionActiva].fields, datos);
+    if (msg) { setError(msg); return; }
+    setError('');
+    setSeccionActiva((s) => Math.min(config.sections.length - 1, s + 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function irAnterior() {
+    setError('');
+    setSeccionActiva((s) => Math.max(0, s - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function onGenerarPdf() {
+    const msg = validarTodo();
+    if (msg) { setError(msg); mostrarToast('Complete los campos obligatorios antes de generar el PDF.'); return; }
+    setError('');
+    generarPdf(slug, datos, true);
+    marcarCompletado(config.codigo);
+    mostrarToast('PDF generado y descargado correctamente.');
+  }
+
+  function onVistaPrevia() {
+    const dataUri = generarPdf(slug, datos, false);
+    setPreviewUrl(dataUri);
+  }
+
+  const seccion = config.sections[seccionActiva];
+  const porcentaje = Math.round(((seccionActiva + 1) / config.sections.length) * 100);
+
+  return (
+    <div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ticargo-red">{config.codigo}</p>
+          <h1 className="text-xl font-semibold text-ticargo-black">{config.titulo}</h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={guardarBorradorActual} className="flex items-center gap-1.5 rounded-md border border-ticargo-border bg-white px-3 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray">
+            <IconSave size={15} /> Guardar Borrador
+          </button>
+          <button onClick={onVistaPrevia} className="flex items-center gap-1.5 rounded-md border border-ticargo-border bg-white px-3 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray">
+            <IconEye size={15} /> Vista previa
+          </button>
+          <button onClick={onGenerarPdf} className="flex items-center gap-1.5 rounded-md bg-ticargo-red px-4 py-2 text-sm font-semibold text-white hover:bg-ticargo-redDark">
+            <IconDownload size={15} /> Generar PDF
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-ticargo-red">{error}</div>}
+
+      <div className="mb-2 flex items-center justify-between text-xs text-ticargo-black/60">
+        <span>Sección {seccionActiva + 1} de {config.sections.length}</span>
+        <span>{porcentaje}% completado</span>
+      </div>
+      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-ticargo-gray">
+        <div className="h-full bg-ticargo-red transition-all" style={{ width: `${porcentaje}%` }} />
+      </div>
+      <div className="mb-5 flex flex-wrap gap-2">
+        {config.sections.map((s, idx) => (
+          <button key={s.titulo} onClick={() => setSeccionActiva(idx)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${idx===seccionActiva ? 'border-ticargo-red bg-ticargo-red text-white' : idx<seccionActiva ? 'border-green-300 bg-green-50 text-green-700' : 'border-ticargo-border bg-white text-ticargo-black/60'}`}>
+            {idx+1}. {s.titulo}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-ticargo-border bg-white p-5">
+        <h2 className="mb-4 text-base font-semibold text-ticargo-black">{seccion.titulo}</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {seccion.fields.map((field) => <Campo key={field.name} field={field} datos={datos} set={set} />)}
+        </div>
+      </div>
+
+      <div className="mt-4 flex justify-between">
+        <button disabled={seccionActiva===0} onClick={irAnterior} className="flex items-center gap-1 rounded-md border border-ticargo-border px-4 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray disabled:cursor-not-allowed disabled:opacity-40">
+          <IconChevronLeft size={16} /> Anterior
+        </button>
+        {seccionActiva < config.sections.length - 1 && (
+          <button onClick={irSiguiente} className="flex items-center gap-1 rounded-md bg-ticargo-black px-4 py-2 text-sm font-medium text-white hover:bg-black">
+            Siguiente sección <IconChevronRight size={16} />
+          </button>
+        )}
+      </div>
+
+      {previewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewUrl(null)}>
+          <div className="h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg bg-white" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-ticargo-border px-4 py-2">
+              <p className="text-sm font-semibold text-ticargo-black">Vista previa del PDF</p>
+              <button onClick={() => setPreviewUrl(null)} className="text-ticargo-black/60 hover:text-ticargo-red"><IconX size={18} /></button>
+            </div>
+            <iframe src={previewUrl} className="h-full w-full" title="Vista previa" />
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-ticargo-black px-4 py-3 text-sm text-white shadow-lg">{toast}</div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   9. DASHBOARD
+   ============================================================ */
+const ESTADO_UI = {
+  nuevo: { label: 'Nuevo', icon: IconCircle, className: 'text-ticargo-black/40' },
+  'en-progreso': { label: 'En progreso', icon: IconCircleDot, className: 'text-amber-600' },
+  completado: { label: 'Completado', icon: IconCircleCheck, className: 'text-green-600' },
+};
+
+function FormCard({ f, onAbrir }) {
+  const [estado, setEstado] = useState('nuevo');
+  useEffect(() => { setEstado(estadoFormulario(f.codigo)); }, [f.codigo]);
+  const info = ESTADO_UI[estado];
+  const EstadoIcon = info.icon;
+  return (
+    <button onClick={() => onAbrir(f.slug)} className="group flex flex-col justify-between rounded-xl border border-ticargo-border bg-white p-5 text-left shadow-sm transition-shadow hover:shadow-md">
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-ticargo-red/10 text-ticargo-red"><IconFile size={20} /></span>
+          <span className={`flex items-center gap-1 text-xs font-medium ${info.className}`}><EstadoIcon size={12} /> {info.label}</span>
+        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-ticargo-black/40">{f.codigo}</p>
+        <h3 className="mt-1 text-base font-semibold text-ticargo-black">{f.titulo}</h3>
+        <p className="mt-1.5 text-sm text-ticargo-black/60">{f.descripcion}</p>
+      </div>
+      <div className="mt-4 flex items-center gap-1 text-sm font-medium text-ticargo-red">
+        Diligenciar <IconChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+      </div>
+    </button>
+  );
+}
+
+function Dashboard({ onAbrir }) {
+  return (
+    <div>
+      <div className="mb-6 flex items-start gap-3 rounded-xl bg-ticargo-black p-5 text-white sm:p-6">
+        <IconShield size={28} className="mt-0.5 shrink-0 text-ticargo-red" />
+        <div>
+          <h1 className="text-lg font-semibold sm:text-xl">Portal de Vinculación SAGRILAFT — {EMPRESA.razonSocial}</h1>
+          <p className="mt-1 text-sm text-white/70">Diligencie digitalmente los formularios de vinculación, genere el PDF oficial y guárdelo o envíelo a su contacto en TI Cargo. Oficial de Cumplimiento: {EMPRESA.oficialCumplimiento}.</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {FORMULARIOS.map((f) => <FormCard key={f.slug} f={f} onAbrir={onAbrir} />)}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   10. APP RAÍZ (ruteo por hash)
+   ============================================================ */
+function App() {
+  const [ruta, setRuta] = useState(window.location.hash || '#/');
+  useEffect(() => {
+    const onHash = () => setRuta(window.location.hash || '#/');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const slug = ruta.startsWith('#/') ? ruta.slice(2) : '';
+  const irA = (s) => { window.location.hash = `#/${s}`; };
+
+  return (
+    <div className="min-h-screen bg-ticargo-gray">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-ticargo-red px-4 shadow-md sm:px-6">
+        <button onClick={() => irA('')} className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded bg-white px-2.5 py-1.5">
+            <IconShield size={18} className="text-ticargo-red" />
+            <span className="text-sm font-bold text-ticargo-red">TI CARGO</span>
+          </div>
+        </button>
+        <div className="hidden text-right text-white sm:block">
+          <p className="text-sm font-semibold leading-tight">{EMPRESA.razonSocial}</p>
+          <p className="text-xs leading-tight text-white/85">Portal de Vinculación SAGRILAFT</p>
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-7xl">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto bg-ticargo-black md:block">
+          <nav className="flex flex-col gap-1 p-3">
+            <button onClick={() => irA('')} className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${!slug ? 'bg-ticargo-red text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
+              <IconLayout size={16} /> Dashboard
+            </button>
+            <p className="mt-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-white/40">Formularios SAGRILAFT</p>
+            {FORMULARIOS.map((f) => (
+              <button key={f.slug} onClick={() => irA(f.slug)} className={`flex items-start gap-2 rounded-md px-3 py-2 text-left text-sm ${slug===f.slug ? 'bg-ticargo-red text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
+                <IconFile size={16} className="mt-0.5 shrink-0" />
+                <span><span className="block leading-tight">{f.titulo}</span><span className="block text-[10px] text-white/50">{f.codigo}</span></span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="min-h-[calc(100vh-4rem)] flex-1 px-4 py-6 sm:px-6">
+          {slug && FORM_CONFIGS[slug] ? <FormPage slug={slug} onVolver={() => irA('')} /> : <Dashboard onAbrir={irA} />}
+        </main>
+      </div>
+
+      <footer className="border-t border-ticargo-border bg-white px-4 py-4 text-center text-xs text-ticargo-black/60 sm:px-6">
+        {EMPRESA.razonSocial} · NIT {EMPRESA.nit} · {EMPRESA.direccion} · {EMPRESA.telefono}
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
