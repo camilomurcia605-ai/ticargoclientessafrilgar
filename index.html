@@ -1,1429 +1,1261 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Portal SAGRILAFT — TI Cargo</title>
-
-<!--
-  ARCHIVO ÚNICO, SIN INSTALACIÓN. Ábrelo con doble clic o súbelo a cualquier
-  hosting/intranet. Requiere internet la primera vez (React/Tailwind/jsPDF
-  se cargan desde CDN).
-
-  SEGURIDAD Y ALCANCE — LEER ANTES DE USAR CON DATOS REALES:
-  - Sin backend, por diseño: todo se guarda en localStorage del navegador
-    donde se llena cada formulario. No hay sincronización entre el celular
-    de una contraparte y tu computador — cada equipo ve solo lo que se
-    diligenció en ese mismo navegador.
-  - Los textos legales (declaraciones juramentadas, Habeas Data, compromisos
-    BASC) son los que definiste en tu especificación, transcritos literal.
-    Valídalos con el área jurídica/cumplimiento de TI Cargo antes de usarlos
-    con contrapartes reales.
-  - Para producción con backend real (recepción centralizada de PDFs,
-    sincronización multi-dispositivo), ver el proyecto Next.js hermano en
-    la carpeta del proyecto, que sí está preparado para conectar una base
-    de datos real.
--->
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal SAGRILAFT - TI Cargo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          ticargo: { red: '#C1272D', redDark: '#9E1F24', black: '#1D1D1B', gray: '#F5F5F5', border: '#D1D5DB' },
-        },
-      },
-    },
-  };
+  tailwind.config = { theme: { extend: { colors: { brand: '#C1272D', brandd: '#9E1F24', ink: '#1D1D1B', soft: '#F5F5F5' }, fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } } };
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
-  body { background: #F5F5F5; font-family: Arial, Calibri, sans-serif; }
-  .input-field { width:100%; border-radius:0.375rem; border:1px solid #D1D5DB; padding:0.5rem 0.75rem; font-size:0.875rem; color:#1D1D1B; }
-  .input-field:focus { outline:none; border-color:#C1272D; box-shadow:0 0 0 3px rgba(193,39,45,0.15); }
-  .label-field { margin-bottom:0.25rem; display:block; font-size:0.875rem; font-weight:500; color:#1D1D1B; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #F5F5F5; color: #1D1D1B; }
+  .fade-in { animation: fi .25s ease-out; }
+  @keyframes fi { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: none; } }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:.4rem; padding:.55rem 1rem; border-radius:.6rem; font-weight:600; font-size:.875rem; transition:all .15s; cursor:pointer; }
+  .btn-primary { background:#C1272D; color:#fff; } .btn-primary:hover { background:#9E1F24; }
+  .btn-dark { background:#1D1D1B; color:#fff; } .btn-dark:hover { background:#000; }
+  .btn-ghost { background:#fff; color:#1D1D1B; border:1px solid #d1d5db; } .btn-ghost:hover { background:#F5F5F5; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .card { background:#fff; border-radius:1rem; box-shadow:0 1px 3px rgba(0,0,0,.08); border:1px solid #eee; }
 </style>
 </head>
 <body>
 <div id="root"></div>
 
+<!-- ============ BLOQUE 1: CONSTANTES Y UTILIDADES ============ -->
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo, Fragment } = React;
-const { jsPDF } = window.jspdf;
-
-/* ============================================================
-   1. CONSTANTES DE MARCA Y TEXTOS LEGALES
-   ============================================================ */
-const EMPRESA = {
-  razonSocial: 'TRANSINTERNATIONAL CARGO S.A.S.',
-  nombreCorto: 'TI Cargo',
+const CO = {
+  nombre: 'TRANSINTERNATIONAL CARGO S.A.S.',
   nit: '805.005.709-6',
-  actividad: 'Agente de Carga Internacional',
-  direccion: 'Carrera 85D No. 48-56 Torre 6 Oficina 423, Cali - Colombia',
-  telefono: '+57(2) 485 6060',
+  dir: 'Carrera 85D No. 48-56 Torre 6 Oficina 423, Cali - Colombia',
+  tel: '+57(2) 485 6060',
   email: 'operaciones@ticargo.co',
-  representanteLegal: 'Gabriel Esteban Jaramillo Hoyos',
-  oficialCumplimiento: 'Cristian Camilo Murcia Olarte',
+  rep: 'Gabriel Esteban Jaramillo Hoyos',
+  oficial: 'Cristian Camilo Murcia Olarte'
+};
+const ADMIN_PASS = 'ticargo2026';
+const KEY_CLIENTS = 'ticargo_clients_v1';
+const KEY_DRAFT = 'ticargo_draft_v1';
+
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  size() { try { let n = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += (k.length + (localStorage.getItem(k) || '').length) * 2; } return n; } catch (e) { return 0; } }
 };
 
-const ROJO = [193, 39, 45];
-const NEGRO = [29, 29, 27];
-const GRIS = [107, 114, 128];
-const GRIS_CLARO = [245, 245, 245];
-const GRIS_BORDE = [209, 213, 219];
+const normNit = (s) => String(s || '').replace(/[^0-9]/g, '');
+const sameNit = (a, b) => { a = normNit(a); b = normNit(b); if (!a || !b) return false; return a === b || a.slice(0, -1) === b || b.slice(0, -1) === a; };
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (iso) => { if (!iso) return ''; const p = String(iso).slice(0, 10).split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : iso; };
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const fmtLong = (iso) => { const d = iso ? new Date(iso + 'T12:00:00') : new Date(); return d.getDate() + ' de ' + MESES[d.getMonth()] + ' de ' + d.getFullYear(); };
+const addYear = (iso) => { if (!iso) return ''; const d = new Date(iso + 'T12:00:00'); d.setFullYear(d.getFullYear() + 1); return d.toISOString().slice(0, 10); };
+const money = (n) => (n === '' || n == null || isNaN(Number(n))) ? '' : '$ ' + Number(n).toLocaleString('es-CO');
+const num = (n) => { const v = parseFloat(n); return isNaN(v) ? 0 : v; };
 
-const FORMULARIOS = [
-  { codigo: 'FO-SGR-001', slug: 'persona-natural', titulo: 'Vinculación Persona Natural', descripcion: 'Diligenciamiento SAGRILAFT para contrapartes persona natural.' },
-  { codigo: 'FO-SGR-002', slug: 'persona-juridica', titulo: 'Vinculación Persona Jurídica', descripcion: 'Diligenciamiento SAGRILAFT para contrapartes persona jurídica.' },
-  { codigo: 'FO-SGR-003', slug: 'origen-fondos', titulo: 'Declaración de Origen de Fondos y Bienes', descripcion: 'Declaración juramentada sobre el origen lícito de fondos y bienes.' },
-  { codigo: 'FO-SGR-004', slug: 'habeas-data', titulo: 'Autorización Tratamiento de Datos Personales', descripcion: 'Autorización conforme a la Ley 1581 de 2012 (Habeas Data).' },
-  { codigo: 'FO-SGR-005', slug: 'acuerdo-seguridad', titulo: 'Acuerdo de Seguridad BASC', descripcion: 'Compromisos de seguridad en la cadena de suministro.' },
-  { codigo: 'FO-SGR-006', slug: 'visita-seguridad', titulo: 'Visita Comercial / Visita de Seguridad', descripcion: 'Cuestionario de verificación de seguridad en instalaciones.' },
-  { codigo: 'FO-SGR-007', slug: 'carta-responsabilidad', titulo: 'Carta de Responsabilidad / Mandato Comercial', descripcion: 'Declaración de responsabilidad y mandato como agente de carga.' },
-];
-
-const TEXTO_HABEAS_DATA = `En cumplimiento de la Ley Estatutaria 1581 de 2012 "Por la cual se dictan disposiciones generales para la protección de datos personales" y su Decreto Reglamentario 1377 de 2013, TRANSINTERNATIONAL CARGO S.A.S., identificada con NIT 805.005.709-6, en calidad de Responsable del Tratamiento de Datos Personales, informa que los datos personales recogidos serán utilizados para:
-
-a) Cumplimiento del Sistema de Autocontrol y Gestión del Riesgo Integral de Lavado de Activos, Financiación del Terrorismo y Financiamiento de la Proliferación de Armas de Destrucción Masiva (SAGRILAFT).
-b) Consulta en listas vinculantes y restrictivas nacionales e internacionales (OFAC, ONU, UE, entre otras).
-c) Verificación de antecedentes judiciales, disciplinarios, fiscales y de policía.
-d) Gestión de la relación comercial, contractual y operativa.
-e) Comunicación de información relacionada con los servicios contratados.
-f) Cumplimiento de requerimientos legales ante autoridades competentes, incluyendo la Unidad de Información y Análisis Financiero (UIAF) y la Superintendencia de Sociedades.
-
-El titular tiene derecho a conocer, actualizar, rectificar y solicitar la supresión de sus datos personales en cualquier momento, dirigiendo su solicitud a: operaciones@ticargo.co o a la dirección Carrera 85D No. 48-56 Torre 6 Oficina 423, Cali.`;
-
-const TEXTO_DECLARACION_ORIGEN_FONDOS = 'Declaro bajo la gravedad del juramento, que los fondos, bienes y recursos que poseo y que empleo en mis actividades comerciales y transacciones con TRANSINTERNATIONAL CARGO S.A.S. provienen de actividades lícitas y no están vinculados con el lavado de activos, la financiación del terrorismo ni la financiación de la proliferación de armas de destrucción masiva. Los fondos aquí descritos corresponden al ejercicio normal de mis actividades.';
-
-const COMPROMISOS_SEGURIDAD_BASC = [
-  'Implementar y mantener medidas de seguridad para prevenir la contaminación de la carga con sustancias ilícitas.',
-  'Notificar inmediatamente a TRANSINTERNATIONAL CARGO S.A.S. cualquier actividad sospechosa o irregularidad en la cadena de suministro.',
-  'Garantizar la integridad de la carga desde el punto de origen hasta el destino final.',
-  'Verificar antecedentes de sus empleados y subcontratistas involucrados en las operaciones.',
-  'Colaborar con las auditorías de seguridad que TRANSINTERNATIONAL CARGO S.A.S. requiera.',
-  'Mantener registros documentados de las medidas de seguridad implementadas.',
-  'Reportar cualquier incidente de seguridad dentro de las 24 horas siguientes a su ocurrencia.',
-  'Cumplir con la normatividad colombiana e internacional vigente en materia de seguridad de la cadena de suministro.',
-];
-
-const PREGUNTAS_VISITA_SEGURIDAD = [
-  '¿La empresa tiene un área específica para recepción de visitantes?',
-  '¿Se solicita identificación a los visitantes?',
-  '¿Se lleva registro de ingreso y salida de visitantes?',
-  '¿Las instalaciones cuentan con cerramiento perimetral (muro, cerca, reja)?',
-  '¿Existe control de acceso vehicular?',
-  '¿Las áreas de carga y descarga están debidamente señalizadas?',
-  '¿Existe circuito cerrado de televisión (CCTV)?',
-  '¿Se cuenta con servicio de vigilancia privada?',
-  '¿La empresa tiene política de seguridad documentada?',
-  '¿Se realizan verificación de antecedentes al personal?',
-  '¿Se realizan capacitaciones periódicas en seguridad al personal?',
-  '¿Existe un procedimiento para el manejo de mercancía?',
-  '¿Se inspeccionan los vehículos antes de carga y después de descarga?',
-  '¿Se utilizan sellos de seguridad en las unidades de transporte?',
-  '¿Se lleva un registro fotográfico del estado de la mercancía?',
-  '¿La empresa tiene seguro de mercancía / carga?',
-  '¿Se cuenta con procedimientos de emergencia?',
-  '¿Existe un plan de contingencia documentado?',
-  '¿Las áreas de almacenamiento están debidamente iluminadas?',
-  '¿Se controla el acceso a las áreas de almacenamiento?',
-  '¿La empresa tiene certificación BASC vigente?',
-  '¿La empresa tiene certificación ISO vigente? ¿Cuáles?',
-  '¿Se manejan sustancias o materiales peligrosos?',
-  '¿Se cuenta con señalización de emergencia y rutas de evacuación?',
-  '¿La empresa reporta operaciones sospechosas (ROS)?',
-  '¿Existe un programa de prevención de LA/FT?',
-];
-
-const SI_NO = [{ value: 'si', label: 'Sí' }, { value: 'no', label: 'No' }];
-</script>
-
-<script type="text/babel" data-presets="react">
-/* ============================================================
-   2. UTILIDADES: rutas anidadas, moneda, fechas, localStorage
-   ============================================================ */
-function getPath(obj, path) {
-  return path.split('.').reduce((acc, key) => (acc === null || acc === undefined ? acc : acc[key]), obj);
-}
-function setPath(obj, path, value) {
+function setIn(obj, path, val) {
   const keys = path.split('.');
-  const raiz = Array.isArray(obj) ? [...obj] : { ...(obj || {}) };
-  let cursor = raiz;
-  for (let i = 0; i < keys.length - 1; i++) {
+  const rec = (o, i) => {
     const k = keys[i];
-    const nextIsIndex = /^\d+$/.test(keys[i + 1]);
-    const existente = cursor[k];
-    cursor[k] = existente ? (Array.isArray(existente) ? [...existente] : { ...existente }) : (nextIsIndex ? [] : {});
-    cursor = cursor[k];
-  }
-  cursor[keys[keys.length - 1]] = value;
-  return raiz;
+    const base = Array.isArray(o) ? o.slice() : Object.assign({}, o || {});
+    base[k] = i === keys.length - 1 ? val : rec((o || {})[k], i + 1);
+    return base;
+  };
+  return rec(obj, 0);
 }
+function getIn(obj, path) { return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj); }
 
-function formatCOP(value) {
-  if (value === undefined || value === null || value === '') return '';
-  const n = typeof value === 'string' ? Number(value.replace(/[^\d.-]/g, '')) : value;
-  if (Number.isNaN(n)) return '';
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
-}
-function parseCOP(value) {
-  const digits = value.replace(/[^\d]/g, '');
-  return digits ? Number(digits) : 0;
-}
-function formatFechaCorta(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('es-CO');
-}
-function hoyISO() { return new Date().toISOString().slice(0, 10); }
+const TIPOS_SOC = ['S.A.S.', 'S.A.', 'Ltda.', 'S. en C.', 'E.U.', 'Persona natural', 'Cooperativa', 'Fundación / ONG', 'Sucursal extranjera', 'Otra'];
+const TIPOS_DOC = ['CC', 'CE', 'Pasaporte'];
+const TIPOS_DOC_ACC = ['CC', 'CE', 'Pasaporte', 'NIT', 'Otro'];
+const MEDIOS_PAGO = ['Efectivo', 'Activos virtuales', 'Cuenta compensación', 'Carta crédito', 'Transferencia', 'Otro'];
+const ESTADOS = ['Pendiente documentos', 'En revisión', 'Aprobado', 'Rechazado', 'Requiere información adicional'];
+const RIESGOS = ['Bajo', 'Medio', 'Alto', 'No evaluado'];
 
-function draftKey(codigo) { return `ticargo_form_${codigo}`; }
-function guardarBorrador(codigo, data) {
-  try { localStorage.setItem(draftKey(codigo), JSON.stringify({ data, savedAt: new Date().toISOString() })); return true; }
-  catch (e) { console.error(e); return false; }
-}
-function leerBorrador(codigo) {
-  try { const raw = localStorage.getItem(draftKey(codigo)); return raw ? JSON.parse(raw) : null; } catch { return null; }
-}
-function marcarCompletado(codigo) {
-  try { localStorage.setItem(`${draftKey(codigo)}_completado`, 'true'); } catch {}
-}
-function estadoFormulario(codigo) {
-  const borrador = leerBorrador(codigo);
-  if (!borrador) return 'nuevo';
-  try { if (localStorage.getItem(`${draftKey(codigo)}_completado`) === 'true') return 'completado'; } catch {}
-  return 'en-progreso';
-}
-</script>
-
-<script type="text/babel" data-presets="react">
-/* ============================================================
-   3. ICONOS (SVG inline, sin librería)
-   ============================================================ */
-const Icon = ({ path, size = 18, className = '' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
-);
-const IconShield = (p) => <Icon {...p} path={<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/>} />;
-const IconFile = (p) => <Icon {...p} path={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>} />;
-const IconChevronRight = (p) => <Icon {...p} path={<polyline points="9 18 15 12 9 6"/>} />;
-const IconChevronLeft = (p) => <Icon {...p} path={<polyline points="15 18 9 12 15 6"/>} />;
-const IconPlus = (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />;
-const IconTrash = (p) => <Icon {...p} path={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></>} />;
-const IconSave = (p) => <Icon {...p} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>} />;
-const IconEye = (p) => <Icon {...p} path={<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>} />;
-const IconDownload = (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />;
-const IconX = (p) => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />;
-const IconLayout = (p) => <Icon {...p} path={<><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></>} />;
-const IconCircle = (p) => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />;
-const IconCircleDot = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></>} />;
-const IconCircleCheck = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></>} />;
-const IconAlert = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />;
-</script>
-
-<script type="text/babel" data-presets="react">
-/* ============================================================
-   4. MOTOR DE CAMPOS (config-driven, como el proyecto Next.js)
-   ============================================================ */
-function Campo({ field, datos, set }) {
-  if (field.showIf && !field.showIf(datos)) return null;
-  const valor = getPath(datos, field.name);
-  const colSpanClass = field.colSpan === 2 ? 'sm:col-span-2' : '';
-
-  if (field.type === 'staticText') {
-    return (
-      <div className={colSpanClass}>
-        {field.label && <p className="mb-1.5 text-sm font-semibold text-ticargo-black">{field.label}</p>}
-        <div className="whitespace-pre-line rounded-lg border border-ticargo-border bg-ticargo-gray/60 p-4 text-xs leading-relaxed text-ticargo-black/75">{field.content}</div>
-      </div>
-    );
-  }
-
-  if (field.type === 'signature') {
-    return (
-      <div className={`rounded-lg border border-ticargo-border bg-ticargo-gray/50 p-4 sm:col-span-2`}>
-        <p className="mb-3 text-sm font-semibold text-ticargo-black">{field.label || 'Firma'}</p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <TextInput label="Nombre completo del firmante" value={getPath(datos, field.name + '.nombre')} onChange={(v) => set(field.name + '.nombre', v)} required />
-          <TextInput label="Número de documento" value={getPath(datos, field.name + '.documento')} onChange={(v) => set(field.name + '.documento', v)} required />
-          <TextInput type="date" label="Fecha de firma" value={getPath(datos, field.name + '.fecha')} onChange={(v) => set(field.name + '.fecha', v)} required />
-          <TextInput label="Ciudad de firma" value={getPath(datos, field.name + '.ciudad')} onChange={(v) => set(field.name + '.ciudad', v)} required />
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === 'dynamicList') {
-    const items = valor || [];
-    const max = field.maxItems || 10;
-    const plantilla = Object.fromEntries(field.itemFields.map((f) => [f.name, '']));
-    return (
-      <div className="sm:col-span-2">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-ticargo-black">{field.label}</p>
-          <button type="button" disabled={items.length >= max} onClick={() => set(field.name, [...items, plantilla])}
-            className="flex items-center gap-1 rounded-md border border-ticargo-red px-2.5 py-1 text-xs font-medium text-ticargo-red hover:bg-ticargo-red/5 disabled:cursor-not-allowed disabled:opacity-40">
-            <IconPlus size={14} /> Agregar ({items.length}/{max})
-          </button>
-        </div>
-        <div className="space-y-3">
-          {items.length === 0 && <p className="text-xs text-ticargo-black/40">No se han agregado registros.</p>}
-          {items.map((item, idx) => (
-            <div key={idx} className="relative rounded-lg border border-ticargo-border bg-white p-4">
-              <button type="button" onClick={() => set(field.name, items.filter((_, i) => i !== idx))} className="absolute right-3 top-3 text-ticargo-black/30 hover:text-ticargo-red">
-                <IconTrash size={15} />
-              </button>
-              <div className="grid grid-cols-1 gap-3 pr-6 sm:grid-cols-2">
-                {field.itemFields.map((sub) => (
-                  <Campo key={sub.name} field={{ ...sub, name: `${field.name}.${idx}.${sub.name}` }} datos={datos} set={set} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === 'matrix') {
-    const preguntas = field.preguntas;
-    return (
-      <div className="sm:col-span-2 overflow-x-auto rounded-lg border border-ticargo-border">
-        <table className="w-full text-sm">
-          <thead className="bg-ticargo-gray">
-            <tr>
-              <th className="w-8 px-3 py-2 text-left font-semibold text-ticargo-black">#</th>
-              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Pregunta</th>
-              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Respuesta</th>
-              <th className="px-3 py-2 text-left font-semibold text-ticargo-black">Observación</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ticargo-border">
-            {preguntas.map((pregunta, idx) => {
-              const base = `${field.name}.${idx}`;
-              const respuesta = getPath(datos, `${base}.respuesta`);
-              return (
-                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-ticargo-gray/40'}>
-                  <td className="px-3 py-2 align-top text-ticargo-black/50">{idx + 1}</td>
-                  <td className="px-3 py-2 align-top text-ticargo-black/85">{pregunta}</td>
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex gap-3">
-                      {[['si','Sí'],['no','No'],['na','N.A.']].map(([v,l]) => (
-                        <label key={v} className="flex items-center gap-1 text-xs text-ticargo-black/70">
-                          <input type="radio" checked={respuesta === v} onChange={() => set(`${base}.respuesta`, v)} className="h-3.5 w-3.5 accent-ticargo-red" /> {l}
-                        </label>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <input type="text" value={getPath(datos, `${base}.observacion`) || ''} onChange={(e) => set(`${base}.observacion`, e.target.value)}
-                      className="w-full rounded border border-ticargo-border px-2 py-1 text-xs focus:border-ticargo-red focus:outline-none" />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
-  if (field.type === 'currency') {
-    return (
-      <div className={colSpanClass}>
-        <label className="label-field">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</label>
-        <input type="text" inputMode="numeric" className="input-field" placeholder="$ 0" value={valor ? formatCOP(valor) : ''} onChange={(e) => set(field.name, parseCOP(e.target.value))} />
-      </div>
-    );
-  }
-
-  if (field.type === 'select') {
-    return (
-      <div className={colSpanClass}>
-        <label className="label-field">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</label>
-        <select className="input-field" value={valor || ''} onChange={(e) => set(field.name, e.target.value)}>
-          <option value="">Seleccione...</option>
-          {field.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-    );
-  }
-
-  if (field.type === 'radio') {
-    return (
-      <div className={colSpanClass}>
-        <p className="mb-1.5 text-sm font-medium text-ticargo-black">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {field.options.map((o) => (
-            <label key={o.value} className="flex items-center gap-1.5 text-sm text-ticargo-black/80">
-              <input type="radio" checked={valor === o.value} onChange={() => set(field.name, o.value)} className="h-4 w-4 accent-ticargo-red" /> {o.label}
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === 'checkboxGroup') {
-    const arr = valor || [];
-    return (
-      <div className={colSpanClass}>
-        <p className="mb-1.5 text-sm font-medium text-ticargo-black">{field.label} {field.required && <span className="text-ticargo-red">*</span>}</p>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {field.options.map((o) => (
-            <label key={o.value} className="flex items-center gap-1.5 text-sm text-ticargo-black/80">
-              <input type="checkbox" checked={arr.includes(o.value)} onChange={() => set(field.name, arr.includes(o.value) ? arr.filter((v) => v !== o.value) : [...arr, o.value])} className="h-4 w-4 rounded accent-ticargo-red" /> {o.label}
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (field.type === 'checkbox') {
-    return (
-      <label className={`flex items-start gap-2 text-sm text-ticargo-black/85 ${colSpanClass}`}>
-        <input type="checkbox" checked={!!valor} onChange={(e) => set(field.name, e.target.checked)} className="mt-0.5 h-4 w-4 rounded accent-ticargo-red" />
-        <span>{field.label} {field.required && <span className="text-ticargo-red">*</span>}</span>
-      </label>
-    );
-  }
-
-  // text, email, url, number, date, textarea
-  return (
-    <div className={colSpanClass}>
-      <TextInput label={field.label} type={field.type} value={valor} onChange={(v) => set(field.name, v)} required={field.required} placeholder={field.placeholder} />
-    </div>
-  );
-}
-
-function TextInput({ label, type = 'text', value, onChange, required, placeholder }) {
-  return (
-    <div>
-      <label className="label-field">{label} {required && <span className="text-ticargo-red">*</span>}</label>
-      {type === 'textarea' ? (
-        <textarea rows={3} className="input-field" placeholder={placeholder} value={value || ''} onChange={(e) => onChange(e.target.value)} />
-      ) : (
-        <input type={type} className="input-field" placeholder={placeholder} value={value || ''} onChange={(e) => onChange(e.target.value)} />
-      )}
-    </div>
-  );
-}
-</script>
-
-<script type="text/babel" data-presets="react">
-/* ============================================================
-   5. CONFIGURACIÓN DE LOS 7 FORMULARIOS
-   ============================================================ */
-const representanteFields = [
-  { name: 'nombres', label: 'Nombres y apellidos', type: 'text' },
-  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'select', options: [{value:'CC',label:'CC'},{value:'CE',label:'CE'},{value:'Pasaporte',label:'Pasaporte'},{value:'PPT',label:'PPT'}] },
-  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
-  { name: 'fechaExpedicion', label: 'Fecha de expedición', type: 'date' },
-  { name: 'lugarExpedicion', label: 'Lugar de expedición', type: 'text' },
-  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
-  { name: 'cargoPep', label: 'Cargo (si es PEP)', type: 'text' },
-  { name: 'entidadPep', label: 'Entidad (si es PEP)', type: 'text' },
-  { name: 'fechaVinculacionPep', label: 'Fecha vinculación', type: 'date' },
-  { name: 'fechaDesvinculacionPep', label: 'Fecha desvinculación', type: 'date' },
-];
-const socioFields = [
-  { name: 'nombreRazonSocial', label: 'Nombre o razón social', type: 'text' },
-  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'select', options: [{value:'CC',label:'CC'},{value:'CE',label:'CE'},{value:'NIT',label:'NIT'},{value:'Pasaporte',label:'Pasaporte'}] },
-  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
-  { name: 'porcentajeParticipacion', label: 'Porcentaje de participación (%)', type: 'number' },
-  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
-  { name: 'paisResidencia', label: 'País de residencia/domicilio', type: 'text' },
-];
-const juntaFields = [
-  { name: 'nombres', label: 'Nombres y apellidos', type: 'text' },
-  { name: 'tipoDocumento', label: 'Tipo de documento', type: 'text' },
-  { name: 'numeroDocumento', label: 'Número de documento', type: 'text' },
-  { name: 'cargoJunta', label: 'Cargo en la junta', type: 'select', options: [{value:'Presidente',label:'Presidente'},{value:'Vicepresidente',label:'Vicepresidente'},{value:'Miembro principal',label:'Miembro principal'},{value:'Miembro suplente',label:'Miembro suplente'}] },
-  { name: 'esPep', label: '¿Es PEP?', type: 'radio', options: SI_NO },
-];
-const referenciaFields = [
-  { name: 'tipo', label: 'Tipo', type: 'select', options: [{value:'Comercial',label:'Comercial'},{value:'Bancaria',label:'Bancaria'}] },
-  { name: 'nombreEntidad', label: 'Nombre de la entidad/empresa', type: 'text' },
-  { name: 'contacto', label: 'Contacto', type: 'text' },
-  { name: 'telefono', label: 'Teléfono', type: 'text' },
-  { name: 'ciudad', label: 'Ciudad', type: 'text' },
+const VISITA_Q = [
+  '¿Su Organización cuenta con medidas para la protección de sus instalaciones?',
+  '¿La dirección coincide con los documentos aportados?',
+  '¿La empresa cuenta con más sedes?',
+  '¿La compañía cuenta con infraestructura para el desarrollo de la operación?',
+  '¿La compañía cuenta con infraestructura tecnológica adecuada?',
+  '¿Cuánto tiempo lleva el cliente operando en estas instalaciones?',
+  '¿Cuenta con zonas de almacenamiento para las mercancías?',
+  '¿Persona responsable del manejo de la seguridad?',
+  '¿El sistema de transporte empleado es Propio, Contratado o No tiene?',
+  '¿Cuáles son sus horarios de atención?',
+  '¿Qué certificaciones tiene su organización en Calidad, Seguridad, Otras?',
+  '¿Describa el sector donde se encuentra ubicada la empresa?',
+  '¿Describa las áreas e instalaciones operativas, administrativas?',
+  '¿Cuenta con programa de prevención y lavado de activos?',
+  '¿Cuenta con controles de seguridad para la vinculación del personal?',
+  '¿Aplica controles de seguridad de sostenimiento a los cargos considerados críticos?',
+  '¿Donde realizan la operación logística, realizan registro de ingresos y salida de la carga, vehículos y visitantes?',
+  '¿Las instalaciones cuentan con CCTV?',
+  '¿Dónde desarrollan la operación logística cuenta con CCTV?',
+  '¿El sistema CCTV cuenta con protección contra intrusiones no autorizadas?',
+  '¿El sistema CCTV cuenta con respaldo de energía?',
+  '¿La empresa cuenta con procedimientos documentales para garantizar la seguridad de la cadena logística?',
+  '¿Los vehículos propios o contratados cuentan con sistema satelital?',
+  '¿La empresa cuenta con planes de capacitación del personal que interviene en el proceso de cargue, descargue?',
+  '¿Cuentan con procedimientos de reporte de actividades irregulares a las autoridades?',
+  '¿Cuentan con SGSST?'
 ];
 
-const FORM_CONFIGS = {
-  'persona-natural': {
-    codigo: 'FO-SGR-001', titulo: 'Formulario de Vinculación — Persona Natural', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
-    initial: () => ({
-      general: { tipoVinculacion: '', tipoContraparte: '', tipoContraparteOtro: '', fechaDiligenciamiento: hoyISO() },
-      personales: { primerApellido:'', segundoApellido:'', nombres:'', tipoDocumento:'', numeroDocumento:'', fechaExpedicion:'', lugarExpedicion:'', fechaNacimiento:'', lugarNacimiento:'', nacionalidad:'Colombiana', genero:'', estadoCivil:'' },
-      contacto: { direccionResidencia:'', ciudad:'', departamento:'', pais:'Colombia', telefonoFijo:'', celular:'', email:'', direccionCorrespondencia:'' },
-      laboral: { actividadEconomica:'', profesion:'', codigoCiiu:'', descripcionActividad:'', empresa:'', cargo:'', direccionEmpresa:'', ciudadEmpresa:'', telefonoEmpresa:'' },
-      financiera: { ingresosMensuales:0, egresosMensuales:0, otrosIngresos:0, detalleOtrosIngresos:'', totalActivos:0, totalPasivos:0 },
-      internacional: { operaMonedaExtranjera:'', tipoOperacion:[], poseeProductosExterior:'', tipoProducto:'', entidad:'', paisProducto:'', ciudadProducto:'', montoProducto:0 },
-      pep: { esPep:'', cargoPep:'', fechaVinculacionPep:'', fechaDesvinculacionPep:'', tieneVinculoPep:'', nombrePep:'', parentescoPep:'', cargoPepVinculo:'', manejaRecursosPublicos:'', reconocimientoPublico:'', ejercePoderPublico:'' },
-      declaraciones: { declaracionJuramentada:false, autorizacionConsulta:false, autorizacionDatos:false },
-      firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
-    }),
-    sections: [
-      { titulo: 'Información General', fields: [
-        { name:'general.tipoVinculacion', label:'Tipo de vinculación', type:'radio', required:true, options:[{value:'nueva',label:'Vinculación nueva'},{value:'actualizacion',label:'Actualización anual'}] },
-        { name:'general.tipoContraparte', label:'Tipo de contraparte', type:'radio', required:true, options:[{value:'cliente',label:'Cliente'},{value:'proveedor',label:'Proveedor'},{value:'aliado',label:'Aliado logístico'},{value:'otro',label:'Otro'}] },
-        { name:'general.tipoContraparteOtro', label:'Especifique otro tipo de contraparte', type:'text', showIf:(v)=>getPath(v,'general.tipoContraparte')==='otro' },
-        { name:'general.fechaDiligenciamiento', label:'Fecha de diligenciamiento', type:'date' },
-      ]},
-      { titulo: 'Datos Personales', fields: [
-        { name:'personales.primerApellido', label:'Primer apellido', type:'text', required:true },
-        { name:'personales.segundoApellido', label:'Segundo apellido', type:'text' },
-        { name:'personales.nombres', label:'Nombres', type:'text', required:true },
-        { name:'personales.tipoDocumento', label:'Tipo de documento', type:'select', required:true, options:[{value:'CC',label:'Cédula de ciudadanía'},{value:'CE',label:'Cédula de extranjería'},{value:'Pasaporte',label:'Pasaporte'},{value:'PPT',label:'PPT'},{value:'PEP',label:'PEP'},{value:'Otro',label:'Otro'}] },
-        { name:'personales.numeroDocumento', label:'Número de documento', type:'text', required:true },
-        { name:'personales.fechaExpedicion', label:'Fecha de expedición', type:'date' },
-        { name:'personales.lugarExpedicion', label:'Lugar de expedición', type:'text', required:true },
-        { name:'personales.fechaNacimiento', label:'Fecha de nacimiento', type:'date', required:true },
-        { name:'personales.lugarNacimiento', label:'Lugar de nacimiento', type:'text', required:true },
-        { name:'personales.nacionalidad', label:'Nacionalidad', type:'text', required:true },
-        { name:'personales.genero', label:'Género', type:'radio', options:[{value:'M',label:'Masculino'},{value:'F',label:'Femenino'},{value:'Otro',label:'Otro'}] },
-        { name:'personales.estadoCivil', label:'Estado civil', type:'select', options:['Soltero(a)','Casado(a)','Unión libre','Divorciado(a)','Viudo(a)'].map(v=>({value:v,label:v})) },
-      ]},
-      { titulo: 'Información de Contacto', fields: [
-        { name:'contacto.direccionResidencia', label:'Dirección de residencia', type:'text', required:true, colSpan:2 },
-        { name:'contacto.ciudad', label:'Ciudad', type:'text', required:true },
-        { name:'contacto.departamento', label:'Departamento', type:'text', required:true },
-        { name:'contacto.pais', label:'País', type:'text', required:true },
-        { name:'contacto.telefonoFijo', label:'Teléfono fijo', type:'text' },
-        { name:'contacto.celular', label:'Celular', type:'text', required:true },
-        { name:'contacto.email', label:'Correo electrónico', type:'email', required:true },
-        { name:'contacto.direccionCorrespondencia', label:'Dirección de correspondencia (si es diferente)', type:'text', colSpan:2 },
-      ]},
-      { titulo: 'Información Laboral / Actividad Económica', fields: [
-        { name:'laboral.actividadEconomica', label:'Actividad económica', type:'radio', options:['Asalariado','Independiente','Rentista','Pensionado','Estudiante','Otro'].map(v=>({value:v,label:v})) },
-        { name:'laboral.profesion', label:'Profesión / Ocupación', type:'text', required:true },
-        { name:'laboral.codigoCiiu', label:'Código CIIU', type:'text', placeholder:'4 dígitos' },
-        { name:'laboral.descripcionActividad', label:'Descripción de la actividad económica', type:'textarea', required:true, colSpan:2 },
-        { name:'laboral.empresa', label:'Empresa donde labora', type:'text' },
-        { name:'laboral.cargo', label:'Cargo', type:'text' },
-        { name:'laboral.direccionEmpresa', label:'Dirección de la empresa', type:'text' },
-        { name:'laboral.ciudadEmpresa', label:'Ciudad de la empresa', type:'text' },
-        { name:'laboral.telefonoEmpresa', label:'Teléfono de la empresa', type:'text' },
-      ]},
-      { titulo: 'Información Financiera (COP)', fields: [
-        { name:'financiera.ingresosMensuales', label:'Ingresos mensuales', type:'currency', required:true },
-        { name:'financiera.egresosMensuales', label:'Egresos mensuales', type:'currency', required:true },
-        { name:'financiera.otrosIngresos', label:'Otros ingresos mensuales', type:'currency' },
-        { name:'financiera.detalleOtrosIngresos', label:'Detalle otros ingresos', type:'text' },
-        { name:'financiera.totalActivos', label:'Total activos', type:'currency', required:true },
-        { name:'financiera.totalPasivos', label:'Total pasivos', type:'currency', required:true },
-      ]},
-      { titulo: 'Operaciones Internacionales', fields: [
-        { name:'internacional.operaMonedaExtranjera', label:'¿Realiza operaciones en moneda extranjera?', type:'radio', options:SI_NO },
-        { name:'internacional.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', showIf:(v)=>getPath(v,'internacional.operaMonedaExtranjera')==='si', options:['Importación','Exportación','Inversiones','Préstamos','Transferencias','Otro'].map(v=>({value:v,label:v})) },
-        { name:'internacional.poseeProductosExterior', label:'¿Posee productos financieros en el exterior?', type:'radio', options:SI_NO },
-        { name:'internacional.tipoProducto', label:'Tipo de producto', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-        { name:'internacional.entidad', label:'Entidad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-        { name:'internacional.paisProducto', label:'País', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-        { name:'internacional.ciudadProducto', label:'Ciudad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-        { name:'internacional.montoProducto', label:'Monto', type:'currency', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-      ]},
-      { titulo: 'Personas Expuestas Políticamente (PEP)', fields: [
-        { name:'pep.esPep', label:'¿Es usted una Persona Expuesta Políticamente (PEP)?', type:'radio', options:SI_NO },
-        { name:'pep.cargoPep', label:'Cargo', type:'text', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
-        { name:'pep.fechaVinculacionPep', label:'Fecha de vinculación al cargo', type:'date', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
-        { name:'pep.fechaDesvinculacionPep', label:'Fecha de desvinculación', type:'date', showIf:(v)=>getPath(v,'pep.esPep')==='si' },
-        { name:'pep.tieneVinculoPep', label:'¿Tiene algún vínculo con una PEP? (familiar, socio, asociado)', type:'radio', options:SI_NO },
-        { name:'pep.nombrePep', label:'Nombre de la PEP', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
-        { name:'pep.parentescoPep', label:'Parentesco', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
-        { name:'pep.cargoPepVinculo', label:'Cargo de la PEP', type:'text', showIf:(v)=>getPath(v,'pep.tieneVinculoPep')==='si' },
-        { name:'pep.manejaRecursosPublicos', label:'¿Por su cargo o actividad maneja recursos públicos?', type:'radio', options:SI_NO },
-        { name:'pep.reconocimientoPublico', label:'¿Por su actividad goza de reconocimiento público?', type:'radio', options:SI_NO },
-        { name:'pep.ejercePoderPublico', label:'¿Ejerce algún grado de poder público?', type:'radio', options:SI_NO },
-      ]},
-      { titulo: 'Declaraciones y Autorizaciones', fields: [
-        { name:'declaraciones.declaracionJuramentada', label:'Declaro bajo la gravedad del juramento que: (a) los recursos que poseo provienen de actividades lícitas; (b) no he sido condenado por delitos relacionados con lavado de activos, financiación del terrorismo o delitos relacionados; (c) no me encuentro incluido en listas vinculantes (OFAC, ONU, UE) ni en listas restrictivas nacionales o internacionales; (d) la información suministrada es veraz, verificable y completa.', type:'checkbox', required:true, colSpan:2 },
-        { name:'declaraciones.autorizacionConsulta', label:'Autorizo a TRANSINTERNATIONAL CARGO S.A.S. para que consulte, solicite, reporte y divulgue mi información personal ante cualquier entidad pública o privada, incluyendo centrales de información y listas de control LA/FT, de acuerdo con la normatividad vigente.', type:'checkbox', required:true, colSpan:2 },
-        { name:'declaraciones.autorizacionDatos', label:'Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012 y la política de tratamiento de datos de TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
-        { name:'firma', label:'Firma', type:'signature' },
-      ]},
-    ],
-  },
-};
-</script>
+const DOCS_REQ = [
+  { key: 'cedula_rl', label: 'Copia cédula del representante legal' },
+  { key: 'rut', label: 'RUT actualizado (con código 55, no mayor a 60 días)' },
+  { key: 'camara', label: 'Certificado Cámara de Comercio (vigencia no superior a 1 mes, matrícula renovada)' },
+  { key: 'accionaria', label: 'Composición accionaria' },
+  { key: 'estados_fin', label: 'Estados financieros comparativos (último año, firmados por contador y revisor fiscal)' },
+  { key: 'cedula_cont', label: 'Copia cédula del contador y/o revisor fiscal' },
+  { key: 'tarjeta_cont', label: 'Tarjeta profesional del contador y/o revisor fiscal' },
+  { key: 'renta', label: 'Declaración de renta del año anterior' },
+  { key: 'ref_banc', label: '2 referencias bancarias (no superior a 60 días)' },
+  { key: 'ref_com', label: '2 referencias comerciales (no superior a 60 días)' },
+  { key: 'certs', label: 'Certificaciones y/o resoluciones por autoridad competente' },
+  { key: 'sgsst', label: 'Certificación SGSST expedida por ARL' }
+];
 
-<script type="text/babel" data-presets="react">
-/* Formulario 2: Persona Jurídica */
-FORM_CONFIGS['persona-juridica'] = {
-  codigo: 'FO-SGR-002', titulo: 'Formulario de Vinculación — Persona Jurídica', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
-  initial: () => ({
-    general: { tipoVinculacion:'', tipoContraparte:'', tipoContraparteOtro:'', fechaDiligenciamiento: hoyISO() },
-    datos: { razonSocial:'', nombreComercial:'', nit:'', tipoSociedad:'', fechaConstitucion:'', lugarConstitucion:'', objetoSocial:'', codigoCiiu:'', descripcionActividad:'' },
-    contacto: { direccionPrincipal:'', ciudad:'', departamento:'', pais:'Colombia', telefono:'', sitioWeb:'', email:'' },
-    representantes: [], socios: [], juntaDirectiva: [],
-    financiera: { ingresosOperacionales:0, totalEgresos:0, otrosIngresos:0, detalleOtrosIngresos:'', totalActivos:0, totalPasivos:0, capitalSocial:0 },
-    internacional: { operaMonedaExtranjera:'', tipoOperacion:[], poseeProductosExterior:'', tipoProducto:'', entidad:'', paisProducto:'', ciudadProducto:'', montoProducto:0 },
-    tributaria: { regimenIva:'', granContribuyente:'', autorretenedor:'', agenteRetencion:'' },
-    referencias: [],
-    declaraciones: { declaracionJuramentada:false, autorizacionConsulta:false, autorizacionDatos:false },
-    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
-  }),
-  sections: [
-    { titulo:'Información General', fields:[
-      { name:'general.tipoVinculacion', label:'Tipo de vinculación', type:'radio', required:true, options:[{value:'nueva',label:'Vinculación nueva'},{value:'actualizacion',label:'Actualización anual'}] },
-      { name:'general.tipoContraparte', label:'Tipo de contraparte', type:'radio', required:true, options:[{value:'cliente',label:'Cliente'},{value:'proveedor',label:'Proveedor'},{value:'aliado',label:'Aliado logístico'},{value:'otro',label:'Otro'}] },
-      { name:'general.tipoContraparteOtro', label:'Especifique otro', type:'text', showIf:(v)=>getPath(v,'general.tipoContraparte')==='otro' },
-      { name:'general.fechaDiligenciamiento', label:'Fecha de diligenciamiento', type:'date' },
-    ]},
-    { titulo:'Datos de la Persona Jurídica', fields:[
-      { name:'datos.razonSocial', label:'Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'datos.nombreComercial', label:'Nombre comercial', type:'text' },
-      { name:'datos.nit', label:'NIT', type:'text', required:true, placeholder:'805.005.709-6' },
-      { name:'datos.tipoSociedad', label:'Tipo de sociedad', type:'select', required:true, options:['S.A.S.','S.A.','Ltda.','S.C.A.','S. en C.','E.U.','Sucursal extranjera','Otro'].map(v=>({value:v,label:v})) },
-      { name:'datos.fechaConstitucion', label:'Fecha de constitución', type:'date', required:true },
-      { name:'datos.lugarConstitucion', label:'Lugar de constitución', type:'text', required:true },
-      { name:'datos.objetoSocial', label:'Objeto social', type:'textarea', required:true, colSpan:2 },
-      { name:'datos.codigoCiiu', label:'Código CIIU', type:'text', required:true },
-      { name:'datos.descripcionActividad', label:'Descripción de la actividad económica', type:'textarea', required:true, colSpan:2 },
-    ]},
-    { titulo:'Información de Contacto', fields:[
-      { name:'contacto.direccionPrincipal', label:'Dirección principal', type:'text', required:true, colSpan:2 },
-      { name:'contacto.ciudad', label:'Ciudad', type:'text', required:true },
-      { name:'contacto.departamento', label:'Departamento', type:'text', required:true },
-      { name:'contacto.pais', label:'País', type:'text', required:true },
-      { name:'contacto.telefono', label:'Teléfono', type:'text', required:true },
-      { name:'contacto.sitioWeb', label:'Sitio web', type:'url' },
-      { name:'contacto.email', label:'Correo electrónico corporativo', type:'email', required:true },
-    ]},
-    { titulo:'Representante(s) Legal(es)', fields:[
-      { name:'representantes', label:'Representantes legales (máx. 3)', type:'dynamicList', itemFields:representanteFields, maxItems:3 },
-    ]},
-    { titulo:'Composición Accionaria', fields:[
-      { name:'socios', label:'Socios / accionistas con participación ≥ 5% (máx. 10)', type:'dynamicList', itemFields:socioFields, maxItems:10 },
-    ]},
-    { titulo:'Junta Directiva (Opcional)', fields:[
-      { name:'juntaDirectiva', label:'Miembros de junta directiva (máx. 7)', type:'dynamicList', itemFields:juntaFields, maxItems:7 },
-    ]},
-    { titulo:'Información Financiera (COP — último cierre fiscal)', fields:[
-      { name:'financiera.ingresosOperacionales', label:'Total ingresos operacionales', type:'currency', required:true },
-      { name:'financiera.totalEgresos', label:'Total egresos', type:'currency', required:true },
-      { name:'financiera.otrosIngresos', label:'Otros ingresos no operacionales', type:'currency' },
-      { name:'financiera.detalleOtrosIngresos', label:'Detalle otros ingresos', type:'text' },
-      { name:'financiera.totalActivos', label:'Total activos', type:'currency', required:true },
-      { name:'financiera.totalPasivos', label:'Total pasivos', type:'currency', required:true },
-      { name:'financiera.capitalSocial', label:'Capital social o pagado', type:'currency', required:true },
-    ]},
-    { titulo:'Operaciones Internacionales', fields:[
-      { name:'internacional.operaMonedaExtranjera', label:'¿Realiza operaciones en moneda extranjera?', type:'radio', options:SI_NO },
-      { name:'internacional.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', showIf:(v)=>getPath(v,'internacional.operaMonedaExtranjera')==='si', options:['Importación','Exportación','Inversiones','Préstamos','Transferencias','Otro'].map(v=>({value:v,label:v})) },
-      { name:'internacional.poseeProductosExterior', label:'¿Posee productos financieros en el exterior?', type:'radio', options:SI_NO },
-      { name:'internacional.tipoProducto', label:'Tipo de producto', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-      { name:'internacional.entidad', label:'Entidad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-      { name:'internacional.paisProducto', label:'País', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-      { name:'internacional.ciudadProducto', label:'Ciudad', type:'text', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-      { name:'internacional.montoProducto', label:'Monto', type:'currency', showIf:(v)=>getPath(v,'internacional.poseeProductosExterior')==='si' },
-    ]},
-    { titulo:'Información Tributaria', fields:[
-      { name:'tributaria.regimenIva', label:'Régimen tributario', type:'radio', options:[{value:'Responsable de IVA',label:'Responsable de IVA'},{value:'No responsable de IVA',label:'No responsable de IVA'}] },
-      { name:'tributaria.granContribuyente', label:'Gran contribuyente', type:'radio', options:SI_NO },
-      { name:'tributaria.autorretenedor', label:'Autorretenedor', type:'radio', options:SI_NO },
-      { name:'tributaria.agenteRetencion', label:'Agente de retención', type:'radio', options:SI_NO },
-    ]},
-    { titulo:'Referencias', fields:[
-      { name:'referencias', label:'Referencias comerciales/bancarias (máx. 3)', type:'dynamicList', itemFields:referenciaFields, maxItems:3 },
-    ]},
-    { titulo:'Declaraciones y Autorizaciones', fields:[
-      { name:'declaraciones.declaracionJuramentada', label:'Declaramos bajo la gravedad del juramento que: (a) los recursos de la sociedad provienen de actividades lícitas; (b) la sociedad, sus socios y representantes no han sido condenados por delitos relacionados con lavado de activos o financiación del terrorismo; (c) no se encuentran incluidos en listas vinculantes (OFAC, ONU, UE) ni en listas restrictivas; (d) la información suministrada es veraz, verificable y completa.', type:'checkbox', required:true, colSpan:2 },
-      { name:'declaraciones.autorizacionConsulta', label:'Autorizamos a TRANSINTERNATIONAL CARGO S.A.S. para que consulte, solicite, reporte y divulgue nuestra información ante cualquier entidad pública o privada, incluyendo centrales de información y listas de control LA/FT.', type:'checkbox', required:true, colSpan:2 },
-      { name:'declaraciones.autorizacionDatos', label:'Autorizamos el tratamiento de los datos personales conforme a la Ley 1581 de 2012 y la política de TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
-      { name:'firma', label:'Firma del Representante Legal', type:'signature' },
-    ]},
-  ],
-};
-</script>
+const GEN_DOCS = [
+  { key: 'mandato', codigo: 'DE-GOC-002', titulo: 'Mandato Comercial con Representación', version: '03', file: 'DE-GOC-002_Mandato_Comercial' },
+  { key: 'acuerdo', codigo: 'DE-GOC-010', titulo: 'Acuerdo de Seguridad', version: '03', file: 'DE-GOC-010_Acuerdo_Seguridad' },
+  { key: 'visita', codigo: 'FO-GD-004', titulo: 'Visita de Seguridad Clientes y Proveedores', version: '03', file: 'FO-GD-004_Visita_Seguridad' },
+  { key: 'vinculacion', codigo: 'FO-GD-005', titulo: 'Vinculación, Actualización y Conocimiento del Cliente Circular 170', version: '04', file: 'FO-GD-005_Vinculacion_Circular170' }
+];
 
-<script type="text/babel" data-presets="react">
-/* Formulario 3: Origen de Fondos y Bienes */
-FORM_CONFIGS['origen-fondos'] = {
-  codigo: 'FO-SGR-003', titulo: 'Declaración de Origen de Fondos y Bienes', subtitulo: 'Sistema SAGRILAFT — LA/FT/FPADM',
-  initial: () => ({
-    declarante: { nombreRazonSocial:'', tipoDocumentoNit:'', numeroDocumento:'', representanteLegal:'' },
-    origenFondos: { descripcion:'', fuentePrincipal:[], fuenteOtro:'' },
-    bienes: { poseeInmuebles:'', inmuebles:[], poseeVehiculos:'', vehiculos:[] },
-    declaracion: { aceptaDeclaracion:false },
-    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
-  }),
-  sections: [
-    { titulo:'Datos del Declarante', fields:[
-      { name:'declarante.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'declarante.tipoDocumentoNit', label:'Tipo documento / NIT', type:'text', required:true },
-      { name:'declarante.numeroDocumento', label:'Número de documento', type:'text', required:true },
-      { name:'declarante.representanteLegal', label:'Representante Legal (si es persona jurídica)', type:'text' },
-    ]},
-    { titulo:'Origen de los Fondos', fields:[
-      { name:'origenFondos.descripcion', label:'Descripción detallada del origen de los fondos, bienes y/o recursos (mínimo 100 caracteres)', type:'textarea', required:true, colSpan:2 },
-      { name:'origenFondos.fuentePrincipal', label:'Fuente principal de ingresos', type:'checkboxGroup', required:true, colSpan:2, options:['Actividad comercial','Salario','Rendimientos financieros','Herencia','Venta de bienes','Honorarios profesionales','Otro'].map(v=>({value:v,label:v})) },
-      { name:'origenFondos.fuenteOtro', label:'Especifique otra fuente', type:'text', showIf:(v)=>(getPath(v,'origenFondos.fuentePrincipal')||[]).includes('Otro') },
-    ]},
-    { titulo:'Origen de los Bienes', fields:[
-      { name:'bienes.poseeInmuebles', label:'¿Posee bienes inmuebles?', type:'radio', options:SI_NO },
-      { name:'bienes.inmuebles', label:'Bienes inmuebles', type:'dynamicList', maxItems:8, showIf:(v)=>getPath(v,'bienes.poseeInmuebles')==='si', itemFields:[
-        { name:'descripcion', label:'Descripción', type:'text' }, { name:'ubicacion', label:'Ubicación', type:'text' }, { name:'valorComercial', label:'Valor comercial estimado', type:'currency' },
-      ]},
-      { name:'bienes.poseeVehiculos', label:'¿Posee vehículos?', type:'radio', options:SI_NO },
-      { name:'bienes.vehiculos', label:'Vehículos', type:'dynamicList', maxItems:8, showIf:(v)=>getPath(v,'bienes.poseeVehiculos')==='si', itemFields:[
-        { name:'tipo', label:'Tipo', type:'text' }, { name:'marca', label:'Marca', type:'text' }, { name:'modelo', label:'Modelo', type:'text' }, { name:'placa', label:'Placa', type:'text' }, { name:'valorComercial', label:'Valor comercial estimado', type:'currency' },
-      ]},
-    ]},
-    { titulo:'Declaración Juramentada', fields:[
-      { name:'declaracion.aceptaDeclaracion', label: TEXTO_DECLARACION_ORIGEN_FONDOS, type:'checkbox', required:true, colSpan:2 },
-      { name:'firma', label:'Firma', type:'signature' },
-    ]},
-  ],
-};
+const newRep = () => ({ nombre: '', tipoDoc: 'CC', numDoc: '', fechaExp: '', lugarExp: '', pep: 'No', pepCargo: '', pepEntidad: '', pepVinc: '', pepDesvinc: '' });
+const newAcc = () => ({ nombre: '', tipoDoc: 'CC', numDoc: '', porc: '', pep: 'No', pais: 'Colombia' });
 
-/* Formulario 4: Habeas Data */
-FORM_CONFIGS['habeas-data'] = {
-  codigo: 'FO-SGR-004', titulo: 'Autorización Tratamiento de Datos Personales', subtitulo: 'Habeas Data — Ley 1581 de 2012',
-  initial: () => ({
-    titular: { nombreRazonSocial:'', tipoNumeroDocumento:'', email:'', telefono:'' },
-    autorizacion: { autorizaTratamiento:false, conoceDerechos:false },
-    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
-  }),
-  sections: [
-    { titulo:'Datos del Titular', fields:[
-      { name:'titular.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'titular.tipoNumeroDocumento', label:'Tipo y número de documento', type:'text', required:true },
-      { name:'titular.telefono', label:'Teléfono', type:'text', required:true },
-      { name:'titular.email', label:'Correo electrónico', type:'email', required:true, colSpan:2 },
-    ]},
-    { titulo:'Texto de Autorización', fields:[
-      { name:'textoLegal', label:'', type:'staticText', content: TEXTO_HABEAS_DATA, colSpan:2 },
-    ]},
-    { titulo:'Autorización', fields:[
-      { name:'autorizacion.autorizaTratamiento', label:'Autorizo de manera libre, voluntaria, previa, expresa e informada a TRANSINTERNATIONAL CARGO S.A.S. para el tratamiento de mis datos personales de acuerdo con las finalidades descritas.', type:'checkbox', required:true, colSpan:2 },
-      { name:'autorizacion.conoceDerechos', label:'Declaro que he sido informado(a) de los derechos que me asisten como titular de los datos personales consagrados en el artículo 8 de la Ley 1581 de 2012.', type:'checkbox', required:true, colSpan:2 },
-      { name:'firma', label:'Firma', type:'signature' },
-    ]},
-  ],
-};
-</script>
-
-<script type="text/babel" data-presets="react">
-/* Formulario 5: Acuerdo de Seguridad BASC */
-const compromisoFields = COMPROMISOS_SEGURIDAD_BASC.map((texto, i) => ({ name:`compromisos.c${i}`, label:texto, type:'checkbox', required:true, colSpan:2 }));
-
-FORM_CONFIGS['acuerdo-seguridad'] = {
-  codigo: 'FO-SGR-005', titulo: 'Acuerdo de Seguridad BASC', subtitulo: 'Compromisos de seguridad en la cadena de suministro',
-  initial: () => ({
-    contraparte: { nombreRazonSocial:'', nitCc:'', representanteLegal:'', direccion:'', ciudad:'', telefono:'', email:'', actividadEconomica:'', productosServicios:'' },
-    compromisos: Object.fromEntries(COMPROMISOS_SEGURIDAD_BASC.map((_, i) => [`c${i}`, false])),
-    declaracion: { aceptaCondiciones:false },
-    firma: { nombre:'', documento:'', cargo:'', fecha: hoyISO(), ciudad:'' },
-  }),
-  sections: [
-    { titulo:'Datos de la Contraparte', fields:[
-      { name:'contraparte.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'contraparte.nitCc', label:'NIT / CC', type:'text', required:true },
-      { name:'contraparte.representanteLegal', label:'Representante Legal', type:'text', required:true },
-      { name:'contraparte.direccion', label:'Dirección', type:'text', required:true },
-      { name:'contraparte.ciudad', label:'Ciudad', type:'text', required:true },
-      { name:'contraparte.telefono', label:'Teléfono', type:'text', required:true },
-      { name:'contraparte.email', label:'Correo electrónico', type:'email', required:true },
-      { name:'contraparte.actividadEconomica', label:'Actividad económica', type:'text', required:true },
-      { name:'contraparte.productosServicios', label:'Productos/servicios que provee o recibe', type:'textarea', colSpan:2 },
-    ]},
-    { titulo:'Compromisos de Seguridad', fields: compromisoFields },
-    { titulo:'Firma', fields:[
-      { name:'declaracion.aceptaCondiciones', label:'Declaro conocer y aceptar las condiciones de seguridad establecidas por TRANSINTERNATIONAL CARGO S.A.S.', type:'checkbox', required:true, colSpan:2 },
-      { name:'firma.nombre', label:'Nombre completo', type:'text', required:true },
-      { name:'firma.documento', label:'Documento', type:'text', required:true },
-      { name:'firma.cargo', label:'Cargo', type:'text' },
-      { name:'firma.fecha', label:'Fecha', type:'date', required:true },
-      { name:'firma.ciudad', label:'Ciudad', type:'text', required:true },
-    ]},
-  ],
-};
-
-/* Formulario 6: Visita Comercial / Seguridad */
-FORM_CONFIGS['visita-seguridad'] = {
-  codigo: 'FO-SGR-006', titulo: 'Visita Comercial / Visita de Seguridad', subtitulo: 'Cuestionario de verificación de seguridad',
-  initial: () => ({
-    empresa: { razonSocial:'', nit:'', direccion:'', ciudad:'', personaAtiende:'', cargo:'', fechaVisita: hoyISO() },
-    cuestionario: PREGUNTAS_VISITA_SEGURIDAD.map((pregunta) => ({ pregunta, respuesta:'', observacion:'' })),
-    observaciones: { observacionesGenerales:'', concepto:'', recomendaciones:'' },
-    firmaVisitador: { nombre:'', cargo:'', documento:'', fecha: hoyISO() },
-    firmaAtiende: { nombre:'', cargo:'', documento:'', fecha: hoyISO() },
-  }),
-  sections: [
-    { titulo:'Datos de la Empresa Visitada', fields:[
-      { name:'empresa.razonSocial', label:'Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'empresa.nit', label:'NIT', type:'text', required:true },
-      { name:'empresa.direccion', label:'Dirección de las instalaciones visitadas', type:'text', required:true },
-      { name:'empresa.ciudad', label:'Ciudad', type:'text', required:true },
-      { name:'empresa.personaAtiende', label:'Persona que atiende la visita', type:'text', required:true },
-      { name:'empresa.cargo', label:'Cargo', type:'text' },
-      { name:'empresa.fechaVisita', label:'Fecha de la visita', type:'date', required:true },
-    ]},
-    { titulo:'Cuestionario de Seguridad', fields:[
-      { name:'cuestionario', label:'', type:'matrix', preguntas: PREGUNTAS_VISITA_SEGURIDAD, colSpan:2 },
-    ]},
-    { titulo:'Observaciones Generales', fields:[
-      { name:'observaciones.observacionesGenerales', label:'Observaciones adicionales del visitador', type:'textarea', colSpan:2 },
-      { name:'observaciones.concepto', label:'Concepto de la visita', type:'select', required:true, options:['FAVORABLE','FAVORABLE CON OBSERVACIONES','NO FAVORABLE'].map(v=>({value:v,label:v})) },
-      { name:'observaciones.recomendaciones', label:'Recomendaciones', type:'textarea', colSpan:2 },
-    ]},
-    { titulo:'Firmas', fields:[
-      { name:'firmaVisitador.nombre', label:'Nombre de quien realiza la visita', type:'text', required:true },
-      { name:'firmaVisitador.cargo', label:'Cargo', type:'text' },
-      { name:'firmaVisitador.documento', label:'Documento', type:'text', required:true },
-      { name:'firmaVisitador.fecha', label:'Fecha', type:'date', required:true },
-      { name:'firmaAtiende.nombre', label:'Nombre de quien atiende la visita', type:'text', required:true },
-      { name:'firmaAtiende.cargo', label:'Cargo', type:'text' },
-      { name:'firmaAtiende.documento', label:'Documento', type:'text', required:true },
-      { name:'firmaAtiende.fecha', label:'Fecha', type:'date', required:true },
-    ]},
-  ],
-};
-
-/* Formulario 7: Carta de Responsabilidad / Mandato Comercial */
-FORM_CONFIGS['carta-responsabilidad'] = {
-  codigo: 'FO-SGR-007', titulo: 'Carta de Responsabilidad / Mandato Comercial', subtitulo: 'Declaración de responsabilidad como agente de carga internacional',
-  initial: () => ({
-    mandante: { nombreRazonSocial:'', nitCc:'', representanteLegal:'', tipoNumeroDocumentoRL:'', direccion:'', ciudad:'', telefono:'', email:'' },
-    mandato: { tipoOperacion:[], tipoCarga:'', productos:'', origenFrecuente:'', destinoFrecuente:'', incoterm:'' },
-    declaracion: { declaraProcedenciaLicita:false, comprometeInformacion:false, autorizaMandato:false },
-    firma: { nombre:'', documento:'', fecha: hoyISO(), ciudad:'' },
-  }),
-  sections: [
-    { titulo:'Datos del Mandante', fields:[
-      { name:'mandante.nombreRazonSocial', label:'Nombre / Razón Social', type:'text', required:true, colSpan:2 },
-      { name:'mandante.nitCc', label:'NIT / CC', type:'text', required:true },
-      { name:'mandante.representanteLegal', label:'Representante Legal', type:'text', required:true },
-      { name:'mandante.tipoNumeroDocumentoRL', label:'Tipo y número de documento del R.L.', type:'text', required:true },
-      { name:'mandante.direccion', label:'Dirección', type:'text', required:true },
-      { name:'mandante.ciudad', label:'Ciudad', type:'text', required:true },
-      { name:'mandante.telefono', label:'Teléfono', type:'text', required:true },
-      { name:'mandante.email', label:'Correo electrónico', type:'email', required:true },
-    ]},
-    { titulo:'Descripción del Mandato', fields:[
-      { name:'mandato.tipoOperacion', label:'Tipo de operación', type:'checkboxGroup', required:true, options:[{value:'Importación',label:'Importación'},{value:'Exportación',label:'Exportación'},{value:'Ambas',label:'Ambas'}] },
-      { name:'mandato.tipoCarga', label:'Tipo de carga', type:'select', required:true, options:['Carga general','Carga suelta','Contenedor FCL','Contenedor LCL','Carga aérea','Carga proyecto','Otra'].map(v=>({value:v,label:v})) },
-      { name:'mandato.productos', label:'Productos a manejar', type:'textarea', required:true, colSpan:2 },
-      { name:'mandato.origenFrecuente', label:'Origen frecuente de la mercancía', type:'text' },
-      { name:'mandato.destinoFrecuente', label:'Destino frecuente de la mercancía', type:'text' },
-      { name:'mandato.incoterm', label:'Incoterm habitual', type:'select', required:true, options:['EXW','FCA','FAS','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'].map(v=>({value:v,label:v})) },
-    ]},
-    { titulo:'Declaración de Responsabilidad', fields:[
-      { name:'declaracion.declaraProcedenciaLicita', label:'Declaro que la mercancía que será gestionada por TRANSINTERNATIONAL CARGO S.A.S. en mi nombre es de procedencia lícita, que conozco su contenido y que asumo plena responsabilidad sobre la veracidad de la información declarada en los documentos de transporte.', type:'checkbox', required:true, colSpan:2 },
-      { name:'declaracion.comprometeInformacion', label:'Me comprometo a proporcionar información completa, veraz y oportuna sobre la naturaleza, contenido, peso y valor de la mercancía.', type:'checkbox', required:true, colSpan:2 },
-      { name:'declaracion.autorizaMandato', label:'Autorizo a TRANSINTERNATIONAL CARGO S.A.S. a actuar como mi agente de carga internacional para las operaciones indicadas.', type:'checkbox', required:true, colSpan:2 },
-      { name:'firma', label:'Firma', type:'signature' },
-    ]},
-  ],
-};
-</script>
-
-<script type="text/babel" data-presets="react">
-/* ============================================================
-   6. GENERADOR DE PDF (jsPDF) — marca TI Cargo
-   ============================================================ */
-function construirSeccionesPDF(slug, d) {
-  const SI = (v) => (v === 'si' ? 'Sí' : v === 'no' ? 'No' : '—');
-  if (slug === 'persona-natural') {
-    const patrimonio = (d.financiera.totalActivos||0) - (d.financiera.totalPasivos||0);
-    return [
-      { titulo:'1. INFORMACIÓN GENERAL', columns:2, rows:[
-        { label:'Tipo de vinculación', value: d.general.tipoVinculacion==='nueva'?'Vinculación nueva':'Actualización anual' },
-        { label:'Tipo de contraparte', value: d.general.tipoContraparte },
-        { label:'Fecha de diligenciamiento', value: formatFechaCorta(d.general.fechaDiligenciamiento) },
-      ]},
-      { titulo:'2. DATOS PERSONALES', columns:2, rows:[
-        { label:'Primer apellido', value:d.personales.primerApellido }, { label:'Segundo apellido', value:d.personales.segundoApellido },
-        { label:'Nombres', value:d.personales.nombres }, { label:'Tipo / N° documento', value:`${d.personales.tipoDocumento} ${d.personales.numeroDocumento}` },
-        { label:'Fecha / lugar expedición', value:`${formatFechaCorta(d.personales.fechaExpedicion)} — ${d.personales.lugarExpedicion}` },
-        { label:'Fecha / lugar nacimiento', value:`${formatFechaCorta(d.personales.fechaNacimiento)} — ${d.personales.lugarNacimiento}` },
-        { label:'Nacionalidad', value:d.personales.nacionalidad }, { label:'Género', value:d.personales.genero }, { label:'Estado civil', value:d.personales.estadoCivil },
-      ]},
-      { titulo:'3. INFORMACIÓN DE CONTACTO', columns:2, rows:[
-        { label:'Dirección residencia', value:d.contacto.direccionResidencia }, { label:'Ciudad / Departamento', value:`${d.contacto.ciudad} / ${d.contacto.departamento}` },
-        { label:'País', value:d.contacto.pais }, { label:'Teléfono fijo', value:d.contacto.telefonoFijo }, { label:'Celular', value:d.contacto.celular },
-        { label:'Correo electrónico', value:d.contacto.email }, { label:'Dirección correspondencia', value:d.contacto.direccionCorrespondencia },
-      ]},
-      { titulo:'4. INFORMACIÓN LABORAL / ACTIVIDAD ECONÓMICA', columns:2, rows:[
-        { label:'Actividad económica', value:d.laboral.actividadEconomica }, { label:'Profesión / Ocupación', value:d.laboral.profesion },
-        { label:'Código CIIU', value:d.laboral.codigoCiiu }, { label:'Descripción actividad', value:d.laboral.descripcionActividad },
-        { label:'Empresa', value:d.laboral.empresa }, { label:'Cargo', value:d.laboral.cargo },
-        { label:'Dirección empresa', value:d.laboral.direccionEmpresa }, { label:'Ciudad / Tel. empresa', value:`${d.laboral.ciudadEmpresa||''} ${d.laboral.telefonoEmpresa||''}`.trim() },
-      ]},
-      { titulo:'5. INFORMACIÓN FINANCIERA (COP)', columns:2, rows:[
-        { label:'Ingresos mensuales', value:formatCOP(d.financiera.ingresosMensuales) }, { label:'Egresos mensuales', value:formatCOP(d.financiera.egresosMensuales) },
-        { label:'Otros ingresos', value:formatCOP(d.financiera.otrosIngresos) }, { label:'Detalle otros ingresos', value:d.financiera.detalleOtrosIngresos },
-        { label:'Total activos', value:formatCOP(d.financiera.totalActivos) }, { label:'Total pasivos', value:formatCOP(d.financiera.totalPasivos) },
-        { label:'Total patrimonio', value:formatCOP(patrimonio) },
-      ]},
-      { titulo:'6. OPERACIONES INTERNACIONALES', columns:2, rows:[
-        { label:'¿Opera en moneda extranjera?', value:SI(d.internacional.operaMonedaExtranjera) }, { label:'Tipo de operación', value:(d.internacional.tipoOperacion||[]).join(', ') },
-        { label:'¿Productos en el exterior?', value:SI(d.internacional.poseeProductosExterior) }, { label:'Producto / Entidad', value:`${d.internacional.tipoProducto||''} ${d.internacional.entidad||''}`.trim() },
-        { label:'País / Ciudad', value:`${d.internacional.paisProducto||''} ${d.internacional.ciudadProducto||''}`.trim() }, { label:'Monto', value:formatCOP(d.internacional.montoProducto) },
-      ]},
-      { titulo:'7. PERSONAS EXPUESTAS POLÍTICAMENTE (PEP)', columns:2, rows:[
-        { label:'¿Es PEP?', value:SI(d.pep.esPep) }, { label:'Cargo PEP', value:d.pep.cargoPep },
-        { label:'Vinculación / Desvinculación', value:`${formatFechaCorta(d.pep.fechaVinculacionPep)} — ${formatFechaCorta(d.pep.fechaDesvinculacionPep)}` },
-        { label:'¿Vínculo con una PEP?', value:SI(d.pep.tieneVinculoPep) }, { label:'Nombre / Parentesco', value:`${d.pep.nombrePep||''} ${d.pep.parentescoPep?'('+d.pep.parentescoPep+')':''}`.trim() },
-        { label:'¿Maneja recursos públicos?', value:SI(d.pep.manejaRecursosPublicos) }, { label:'¿Reconocimiento público?', value:SI(d.pep.reconocimientoPublico) }, { label:'¿Ejerce poder público?', value:SI(d.pep.ejercePoderPublico) },
-      ]},
-      { titulo:'8. DECLARACIONES Y AUTORIZACIONES', paragraphs:[
-        `Declaración juramentada: ${d.declaraciones.declaracionJuramentada?'ACEPTADA':'NO ACEPTADA'}`,
-        `Autorización de consulta y reporte: ${d.declaraciones.autorizacionConsulta?'ACEPTADA':'NO ACEPTADA'}`,
-        `Autorización tratamiento de datos personales: ${d.declaraciones.autorizacionDatos?'ACEPTADA':'NO ACEPTADA'}`,
-      ]},
-      { titulo:'FIRMA', columns:2, rows:[
-        { label:'Nombre del firmante', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento },
-        { label:'Fecha de firma', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad de firma', value:d.firma.ciudad },
-      ]},
-    ];
-  }
-
-  if (slug === 'persona-juridica') {
-    const patrimonio = (d.financiera.totalActivos||0) - (d.financiera.totalPasivos||0);
-    const secciones = [
-      { titulo:'1. INFORMACIÓN GENERAL', columns:2, rows:[
-        { label:'Tipo de vinculación', value: d.general.tipoVinculacion==='nueva'?'Vinculación nueva':'Actualización anual' },
-        { label:'Tipo de contraparte', value: d.general.tipoContraparte }, { label:'Fecha de diligenciamiento', value: formatFechaCorta(d.general.fechaDiligenciamiento) },
-      ]},
-      { titulo:'2. DATOS DE LA PERSONA JURÍDICA', columns:2, rows:[
-        { label:'Razón social', value:d.datos.razonSocial }, { label:'Nombre comercial', value:d.datos.nombreComercial }, { label:'NIT', value:d.datos.nit },
-        { label:'Tipo de sociedad', value:d.datos.tipoSociedad }, { label:'Fecha / lugar constitución', value:`${formatFechaCorta(d.datos.fechaConstitucion)} — ${d.datos.lugarConstitucion}` },
-        { label:'Código CIIU', value:d.datos.codigoCiiu }, { label:'Objeto social', value:d.datos.objetoSocial }, { label:'Descripción actividad', value:d.datos.descripcionActividad },
-      ]},
-      { titulo:'3. INFORMACIÓN DE CONTACTO', columns:2, rows:[
-        { label:'Dirección principal', value:d.contacto.direccionPrincipal }, { label:'Ciudad / Departamento', value:`${d.contacto.ciudad} / ${d.contacto.departamento}` },
-        { label:'País', value:d.contacto.pais }, { label:'Teléfono', value:d.contacto.telefono }, { label:'Sitio web', value:d.contacto.sitioWeb }, { label:'Correo corporativo', value:d.contacto.email },
-      ]},
-    ];
-    (d.representantes||[]).forEach((r,i) => secciones.push({ titulo:`4. REPRESENTANTE LEGAL ${i+1}`, columns:2, rows:[
-      { label:'Nombres', value:r.nombres }, { label:'Tipo / N° documento', value:`${r.tipoDocumento||''} ${r.numeroDocumento||''}`.trim() },
-      { label:'Expedición', value:`${formatFechaCorta(r.fechaExpedicion)} — ${r.lugarExpedicion||''}` }, { label:'¿Es PEP?', value:SI(r.esPep) }, { label:'Cargo / Entidad PEP', value:`${r.cargoPep||''} ${r.entidadPep||''}`.trim() },
-    ]}));
-    if ((d.socios||[]).length) secciones.push({ titulo:'5. COMPOSICIÓN ACCIONARIA (≥ 5%)', rows:(d.socios||[]).map((s,i)=>({ label:`Socio ${i+1}`, value:`${s.nombreRazonSocial||''} — ${s.tipoDocumento||''} ${s.numeroDocumento||''} — ${s.porcentajeParticipacion||0}% — PEP: ${SI(s.esPep)} — ${s.paisResidencia||''}` })) });
-    if ((d.juntaDirectiva||[]).length) secciones.push({ titulo:'6. JUNTA DIRECTIVA', rows:(d.juntaDirectiva||[]).map((j,i)=>({ label:`Miembro ${i+1} — ${j.cargoJunta||''}`, value:`${j.nombres||''} — Doc: ${j.tipoDocumento||''} ${j.numeroDocumento||''} — PEP: ${SI(j.esPep)}` })) });
-    secciones.push({ titulo:'7. INFORMACIÓN FINANCIERA (COP)', columns:2, rows:[
-      { label:'Ingresos operacionales', value:formatCOP(d.financiera.ingresosOperacionales) }, { label:'Total egresos', value:formatCOP(d.financiera.totalEgresos) },
-      { label:'Total activos', value:formatCOP(d.financiera.totalActivos) }, { label:'Total pasivos', value:formatCOP(d.financiera.totalPasivos) },
-      { label:'Total patrimonio', value:formatCOP(patrimonio) }, { label:'Capital social', value:formatCOP(d.financiera.capitalSocial) },
-    ]});
-    secciones.push({ titulo:'8. OPERACIONES INTERNACIONALES', columns:2, rows:[
-      { label:'¿Opera en moneda extranjera?', value:SI(d.internacional.operaMonedaExtranjera) }, { label:'Tipo de operación', value:(d.internacional.tipoOperacion||[]).join(', ') },
-      { label:'¿Productos en el exterior?', value:SI(d.internacional.poseeProductosExterior) }, { label:'Producto / Entidad / País', value:`${d.internacional.tipoProducto||''} ${d.internacional.entidad||''} ${d.internacional.paisProducto||''}`.trim() },
-    ]});
-    secciones.push({ titulo:'9. INFORMACIÓN TRIBUTARIA', columns:2, rows:[
-      { label:'Régimen tributario', value:d.tributaria.regimenIva }, { label:'Gran contribuyente', value:SI(d.tributaria.granContribuyente) },
-      { label:'Autorretenedor', value:SI(d.tributaria.autorretenedor) }, { label:'Agente de retención', value:SI(d.tributaria.agenteRetencion) },
-    ]});
-    if ((d.referencias||[]).length) secciones.push({ titulo:'10. REFERENCIAS', rows:(d.referencias||[]).map((r,i)=>({ label:`Referencia ${i+1} (${r.tipo||''})`, value:`${r.nombreEntidad||''} — ${r.contacto||''} — ${r.telefono||''} — ${r.ciudad||''}` })) });
-    secciones.push({ titulo:'11. DECLARACIONES Y AUTORIZACIONES', paragraphs:[
-      `Declaración juramentada: ${d.declaraciones.declaracionJuramentada?'ACEPTADA':'NO ACEPTADA'}`, `Autorización de consulta y reporte: ${d.declaraciones.autorizacionConsulta?'ACEPTADA':'NO ACEPTADA'}`, `Autorización tratamiento de datos personales: ${d.declaraciones.autorizacionDatos?'ACEPTADA':'NO ACEPTADA'}`,
-    ]});
-    secciones.push({ titulo:'FIRMA DEL REPRESENTANTE LEGAL', columns:2, rows:[
-      { label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha de firma', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad de firma', value:d.firma.ciudad },
-    ]});
-    return secciones;
-  }
-
-  if (slug === 'origen-fondos') {
-    const secciones = [
-      { titulo:'1. DATOS DEL DECLARANTE', columns:2, rows:[
-        { label:'Nombre / Razón Social', value:d.declarante.nombreRazonSocial }, { label:'Tipo documento / NIT', value:d.declarante.tipoDocumentoNit },
-        { label:'Número de documento', value:d.declarante.numeroDocumento }, { label:'Representante Legal', value:d.declarante.representanteLegal },
-      ]},
-      { titulo:'2. ORIGEN DE LOS FONDOS', paragraphs:[d.origenFondos.descripcion], rows:[
-        { label:'Fuente principal de ingresos', value:(d.origenFondos.fuentePrincipal||[]).join(', ') + (d.origenFondos.fuenteOtro?` (${d.origenFondos.fuenteOtro})`:'') },
-      ]},
-    ];
-    if (d.bienes.poseeInmuebles==='si' && (d.bienes.inmuebles||[]).length) secciones.push({ titulo:'3. BIENES INMUEBLES', rows:(d.bienes.inmuebles||[]).map((i,idx)=>({ label:`Inmueble ${idx+1}`, value:`${i.descripcion||''} — ${i.ubicacion||''} — ${formatCOP(Number(i.valorComercial)||0)}` })) });
-    if (d.bienes.poseeVehiculos==='si' && (d.bienes.vehiculos||[]).length) secciones.push({ titulo:'4. VEHÍCULOS', rows:(d.bienes.vehiculos||[]).map((v,idx)=>({ label:`Vehículo ${idx+1}`, value:`${v.tipo||''} ${v.marca||''} ${v.modelo||''} — Placa ${v.placa||''} — ${formatCOP(Number(v.valorComercial)||0)}` })) });
-    secciones.push({ titulo:'DECLARACIÓN JURAMENTADA', paragraphs:[`Estado de la declaración: ${d.declaracion.aceptaDeclaracion?'ACEPTADA':'NO ACEPTADA'}`] });
-    secciones.push({ titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] });
-    return secciones;
-  }
-
-  if (slug === 'habeas-data') {
-    return [
-      { titulo:'1. DATOS DEL TITULAR', columns:2, rows:[
-        { label:'Nombre / Razón Social', value:d.titular.nombreRazonSocial }, { label:'Tipo y número de documento', value:d.titular.tipoNumeroDocumento },
-        { label:'Correo electrónico', value:d.titular.email }, { label:'Teléfono', value:d.titular.telefono },
-      ]},
-      { titulo:'2. TEXTO DE AUTORIZACIÓN', paragraphs: TEXTO_HABEAS_DATA.split('\n\n') },
-      { titulo:'3. AUTORIZACIÓN', paragraphs:[
-        `Autorización de tratamiento de datos: ${d.autorizacion.autorizaTratamiento?'ACEPTADA':'NO ACEPTADA'}`, `Conocimiento de derechos (Art. 8, Ley 1581/2012): ${d.autorizacion.conoceDerechos?'DECLARADO':'NO DECLARADO'}`,
-      ]},
-      { titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] },
-    ];
-  }
-
-  if (slug === 'acuerdo-seguridad') {
-    return [
-      { titulo:'1. DATOS DE LA CONTRAPARTE', columns:2, rows:[
-        { label:'Nombre / Razón Social', value:d.contraparte.nombreRazonSocial }, { label:'NIT / CC', value:d.contraparte.nitCc }, { label:'Representante Legal', value:d.contraparte.representanteLegal },
-        { label:'Dirección', value:d.contraparte.direccion }, { label:'Ciudad', value:d.contraparte.ciudad }, { label:'Teléfono', value:d.contraparte.telefono },
-        { label:'Correo electrónico', value:d.contraparte.email }, { label:'Actividad económica', value:d.contraparte.actividadEconomica }, { label:'Productos/servicios', value:d.contraparte.productosServicios },
-      ]},
-      { titulo:'2. COMPROMISOS DE SEGURIDAD', rows: COMPROMISOS_SEGURIDAD_BASC.map((texto,i)=>({ label:`${i+1}.`, value: (d.compromisos[`c${i}`]?'ACEPTADO — ':'NO ACEPTADO — ') + texto })) },
-      { titulo:'3. FIRMA', columns:2, rows:[
-        { label:'Declaración de aceptación', value:d.declaracion.aceptaCondiciones?'ACEPTADA':'NO ACEPTADA' }, { label:'Nombre completo', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento },
-        { label:'Cargo', value:d.firma.cargo }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad },
-      ]},
-    ];
-  }
-
-  if (slug === 'visita-seguridad') {
-    const RESP = { si:'Sí', no:'No', na:'N.A.' };
-    return [
-      { titulo:'1. DATOS DE LA EMPRESA VISITADA', columns:2, rows:[
-        { label:'Razón Social', value:d.empresa.razonSocial }, { label:'NIT', value:d.empresa.nit }, { label:'Dirección', value:d.empresa.direccion },
-        { label:'Ciudad', value:d.empresa.ciudad }, { label:'Persona que atiende', value:d.empresa.personaAtiende }, { label:'Cargo', value:d.empresa.cargo }, { label:'Fecha de la visita', value:formatFechaCorta(d.empresa.fechaVisita) },
-      ]},
-      { titulo:'2. CUESTIONARIO DE SEGURIDAD', rows:d.cuestionario.map((p,i)=>({ label:`${i+1}. ${p.pregunta}`, value:`${RESP[p.respuesta]||'Sin responder'}${p.observacion?' — '+p.observacion:''}` })) },
-      { titulo:'3. OBSERVACIONES GENERALES', paragraphs:[ d.observaciones.observacionesGenerales || 'Sin observaciones adicionales.', `Concepto de la visita: ${d.observaciones.concepto}`, d.observaciones.recomendaciones?`Recomendaciones: ${d.observaciones.recomendaciones}`:'' ].filter(Boolean) },
-      { titulo:'4. FIRMAS', columns:2, rows:[
-        { label:'Visitador — Nombre', value:d.firmaVisitador.nombre }, { label:'Visitador — Cargo/Doc.', value:`${d.firmaVisitador.cargo||''} / ${d.firmaVisitador.documento}` }, { label:'Visitador — Fecha', value:formatFechaCorta(d.firmaVisitador.fecha) },
-        { label:'Atiende — Nombre', value:d.firmaAtiende.nombre }, { label:'Atiende — Cargo/Doc.', value:`${d.firmaAtiende.cargo||''} / ${d.firmaAtiende.documento}` }, { label:'Atiende — Fecha', value:formatFechaCorta(d.firmaAtiende.fecha) },
-      ]},
-    ];
-  }
-
-  if (slug === 'carta-responsabilidad') {
-    return [
-      { titulo:'1. DATOS DEL MANDANTE', columns:2, rows:[
-        { label:'Nombre / Razón Social', value:d.mandante.nombreRazonSocial }, { label:'NIT / CC', value:d.mandante.nitCc }, { label:'Representante Legal', value:d.mandante.representanteLegal },
-        { label:'Documento R.L.', value:d.mandante.tipoNumeroDocumentoRL }, { label:'Dirección', value:d.mandante.direccion }, { label:'Ciudad', value:d.mandante.ciudad },
-        { label:'Teléfono', value:d.mandante.telefono }, { label:'Correo electrónico', value:d.mandante.email },
-      ]},
-      { titulo:'2. DESCRIPCIÓN DEL MANDATO', columns:2, rows:[
-        { label:'Tipo de operación', value:(d.mandato.tipoOperacion||[]).join(', ') }, { label:'Tipo de carga', value:d.mandato.tipoCarga }, { label:'Productos a manejar', value:d.mandato.productos },
-        { label:'Origen frecuente', value:d.mandato.origenFrecuente }, { label:'Destino frecuente', value:d.mandato.destinoFrecuente }, { label:'Incoterm habitual', value:d.mandato.incoterm },
-      ]},
-      { titulo:'3. DECLARACIÓN DE RESPONSABILIDAD', paragraphs:[
-        `Declaración de procedencia lícita: ${d.declaracion.declaraProcedenciaLicita?'ACEPTADA':'NO ACEPTADA'}`, `Compromiso de información veraz: ${d.declaracion.comprometeInformacion?'ACEPTADO':'NO ACEPTADO'}`, `Autorización de mandato como agente de carga: ${d.declaracion.autorizaMandato?'ACEPTADA':'NO ACEPTADA'}`,
-      ]},
-      { titulo:'FIRMA', columns:2, rows:[{ label:'Nombre', value:d.firma.nombre }, { label:'Documento', value:d.firma.documento }, { label:'Fecha', value:formatFechaCorta(d.firma.fecha) }, { label:'Ciudad', value:d.firma.ciudad }] },
-    ];
-  }
-
-  return [];
+function emptyForm() {
+  const q = {};
+  VISITA_Q.forEach((_, i) => { q[i + 1] = { r: '', obs: '' }; });
+  return {
+    gen: { razon: '', nit: '', comercial: '', tipoSoc: '', fechaConst: '', lugarConst: '', objeto: '', ciiu: '', actividad: '' },
+    contacto: { dir: '', ciudad: '', depto: '', pais: 'Colombia', tel: '', cel: '', email: '', web: '' },
+    reps: [newRep()],
+    accionistas: [],
+    fin: { capital: '', ciiu: '', fechaConst: '', origen: '', ivaReg: '', granContrib: '', autorret: '', agenteRet: '', activos: '', pasivos: '', ingresos: '', egresos: '', otrosIngresos: '' },
+    comex: { imports: [{ p: '' }], exports: [{ p: '' }], pagos: {}, otroPago: '', personas: [], banco: { nombre: '', cuenta: '', tel: '', pais: '' } },
+    contactos: [{ rol: '', nombre: '', tel: '', email: '' }],
+    clientes: [], proveedores: [],
+    refCom: [], refBanc: [],
+    calidad: { sgc: '', sgcCual: '', basc: '', bascCual: '', controles: '' },
+    visita: { atiende: '', cargoAtiende: '', fecha: '', q },
+    decl: { fondos: false, listas: false, datos: false, basc: false },
+    firma: { nombre: '', doc: '', cargo: '', ciudad: '', fecha: todayISO() }
+  };
 }
+// Fusiona datos guardados con la estructura vacia (por si faltan campos)
+function mergeForm(saved) {
+  const base = emptyForm();
+  if (!saved) return base;
+  const out = Object.assign({}, base, saved);
+  ['gen', 'contacto', 'fin', 'calidad', 'decl', 'firma'].forEach(k => { out[k] = Object.assign({}, base[k], saved[k] || {}); });
+  out.comex = Object.assign({}, base.comex, saved.comex || {});
+  out.comex.banco = Object.assign({}, base.comex.banco, (saved.comex || {}).banco || {});
+  out.visita = Object.assign({}, base.visita, saved.visita || {});
+  out.visita.q = Object.assign({}, base.visita.q, (saved.visita || {}).q || {});
+  return out;
+}
+const patrimonio = (f) => num(f.fin.activos) - num(f.fin.pasivos);
 
-function generarPdf(slug, datos, descargar) {
-  const config = FORM_CONFIGS[slug];
-  const secciones = construirSeccionesPDF(slug, datos);
-  const doc = new jsPDF({ unit:'mm', format:'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margenX = 12;
-  const anchoContenido = pageWidth - margenX * 2;
-  let y = 0;
-  let primeraPagina = true;
+// ---- Persistencia de clientes ----
+const getClients = () => LS.get(KEY_CLIENTS, {});
+function upsertClient(nit, patch) {
+  const all = getClients();
+  const cur = all[nit];
+  const hist = (cur && cur.historial) ? cur.historial.slice() : [];
+  if (patch._log) hist.push({ fecha: new Date().toISOString(), accion: patch._log.accion, nota: patch._log.nota || '' });
+  const p = Object.assign({}, patch); delete p._log;
+  const base = cur || { nit, tipo: 'Nueva', fechaVinc: todayISO(), estado: 'Pendiente documentos', riesgo: 'No evaluado', puntaje: '', fechaAprob: '', proxAct: '', obs: '', files: {} };
+  all[nit] = Object.assign({}, base, p, { historial: hist });
+  return LS.set(KEY_CLIENTS, all);
+}
+</script>
 
-  function dibujarBandaSuperior() {
-    doc.setFillColor(...ROJO);
-    doc.rect(0, 0, pageWidth, primeraPagina ? 16 : 8, 'F');
-    doc.setTextColor(255,255,255);
-    if (primeraPagina) {
-      doc.setFontSize(11); doc.setFont(undefined,'bold');
-      doc.text(EMPRESA.razonSocial, margenX, 7);
-      doc.setFontSize(7.5); doc.setFont(undefined,'normal');
-      doc.text(EMPRESA.actividad, margenX, 12);
-      doc.setFontSize(7.5);
-      doc.text(`${config.codigo} · V.01`, pageWidth - margenX, 7, { align:'right' });
-      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CO')}`, pageWidth - margenX, 12, { align:'right' });
-    } else {
-      doc.setFontSize(7); doc.text(`${EMPRESA.razonSocial} — continuación — ${config.codigo}`, margenX, 5.5);
-    }
-  }
+<!-- ============ BLOQUE 2: GENERACION DE PDF ============ -->
+<script type="text/babel" data-presets="react">
+const PM = 40, PW = 532, PTOP = 112, PBOT = 740;
+const RED = [193, 39, 45], INK = [29, 29, 27], GRAYF = [236, 236, 236];
 
-  function nuevaPagina() {
-    doc.addPage();
-    primeraPagina = false;
-    dibujarBandaSuperior();
-    y = 14;
-  }
-
-  function asegurarEspacio(alto) {
-    if (y + alto > pageHeight - 18) nuevaPagina();
-  }
-
-  // Página 1: banda + título
-  dibujarBandaSuperior();
-  y = 22;
-  doc.setTextColor(...NEGRO); doc.setFontSize(12.5); doc.setFont(undefined,'bold');
-  doc.text(config.titulo, pageWidth/2, y, { align:'center', maxWidth: anchoContenido });
-  y += 5.5;
-  doc.setFontSize(9); doc.setTextColor(...ROJO);
-  doc.text(config.subtitulo || '', pageWidth/2, y, { align:'center' });
-  y += 7;
-
-  secciones.forEach((seccion) => {
-    asegurarEspacio(9);
-    doc.setFillColor(...ROJO);
-    doc.rect(margenX, y, anchoContenido, 6.5, 'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(9.5); doc.setFont(undefined,'bold');
-    doc.text(seccion.titulo, margenX + 2, y + 4.5);
-    doc.setFont(undefined,'normal');
-    y += 6.5;
-
-    if (seccion.paragraphs) {
-      seccion.paragraphs.forEach((p) => {
-        if (!p) return;
-        const lineas = doc.splitTextToSize(p, anchoContenido - 6);
-        const alto = lineas.length * 4.2 + 4;
-        asegurarEspacio(alto);
-        doc.setFillColor(...GRIS_CLARO);
-        doc.rect(margenX, y, anchoContenido, alto, 'F');
-        doc.setFontSize(8); doc.setTextColor(...NEGRO);
-        doc.text(lineas, margenX + 3, y + 5);
-        y += alto;
-      });
-    }
-
-    if (seccion.rows) {
-      const columnas = seccion.columns || 1;
-      if (columnas === 2) {
-        for (let i = 0; i < seccion.rows.length; i += 2) {
-          const alto = 5.8;
-          asegurarEspacio(alto);
-          const par = [seccion.rows[i], seccion.rows[i+1]];
-          par.forEach((row, idx) => {
-            if (!row) return;
-            const x = margenX + idx * (anchoContenido/2);
-            const w = anchoContenido/2;
-            doc.setFillColor(...(((i/2)%2===0)?[248,248,248]:[255,255,255]));
-            doc.rect(x, y, w, alto, 'F');
-            doc.setFontSize(7); doc.setTextColor(...GRIS);
-            doc.text(String(row.label), x + 2, y + 2.6);
-            doc.setFontSize(7.8); doc.setTextColor(...NEGRO);
-            const valorTexto = doc.splitTextToSize(String(row.value || '—'), w - 4)[0] || '';
-            doc.text(valorTexto, x + 2, y + 5.2);
-          });
-          doc.setDrawColor(...GRIS_BORDE);
-          doc.rect(margenX, y, anchoContenido, alto);
-          doc.line(margenX + anchoContenido/2, y, margenX + anchoContenido/2, y + alto);
-          y += alto;
-        }
-      } else {
-        seccion.rows.forEach((row, idx) => {
-          const lineasValor = doc.splitTextToSize(String(row.value || '—'), anchoContenido - 6);
-          const alto = Math.max(5.5, lineasValor.length * 3.6 + 3.5);
-          asegurarEspacio(alto);
-          doc.setFillColor(...(idx % 2 === 0 ? [248,248,248] : [255,255,255]));
-          doc.rect(margenX, y, anchoContenido, alto, 'F');
-          doc.setFontSize(7.3); doc.setTextColor(...GRIS); doc.setFont(undefined,'bold');
-          doc.text(String(row.label), margenX + 2, y + 3.4, { maxWidth: anchoContenido - 4 });
-          doc.setFont(undefined,'normal'); doc.setFontSize(7.6); doc.setTextColor(...NEGRO);
-          doc.text(lineasValor, margenX + 2, y + (row.label ? 3.4 + 3.4 : 3.4));
-          y += alto;
-        });
-      }
-      doc.setDrawColor(...GRIS_BORDE);
-    }
-    y += 3;
+function S(s) {
+  return String(s == null ? '' : s).replace(/[–—]/g, '-').replace(/[“”«»]/g, '"').replace(/[‘’]/g, "'")
+    .replace(/[•·]/g, '-').replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '');
+}
+function newPDF(meta) {
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+  return { doc, meta, y: PTOP, fs: 9 };
+}
+function ensure(c, h) { if (c.y + h > PBOT) { c.doc.addPage(); c.y = PTOP; } }
+function wrap(c, t, w, size, bold) {
+  c.doc.setFont('helvetica', bold ? 'bold' : 'normal'); c.doc.setFontSize(size);
+  return c.doc.splitTextToSize(S(t), w);
+}
+function gap(c, h) { c.y += h; }
+function para(c, t, o) {
+  o = o || {};
+  const size = o.size || c.fs, w = (o.w || PW) - (o.indent || 0), lh = size * 1.3;
+  const ls = wrap(c, t, w, size, o.bold);
+  const col = o.color || INK;
+  ls.forEach(l => {
+    ensure(c, lh);
+    c.doc.setFont('helvetica', o.bold ? 'bold' : (o.italic ? 'italic' : 'normal')); c.doc.setFontSize(size); c.doc.setTextColor(col[0], col[1], col[2]);
+    const x = o.align === 'center' ? PM + PW / 2 : o.align === 'right' ? PM + PW : PM + (o.indent || 0);
+    c.doc.text(l, x, c.y + size, { align: o.align || 'left' });
+    c.y += lh;
   });
-
-  // Pie de página en todas las páginas
-  const totalPaginas = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPaginas; i++) {
-    doc.setPage(i);
-    doc.setDrawColor(...ROJO); doc.setLineWidth(0.3);
-    doc.line(margenX, pageHeight - 12, pageWidth - margenX, pageHeight - 12);
-    doc.setFontSize(6.5); doc.setTextColor(...NEGRO);
-    doc.text(`${EMPRESA.razonSocial} | NIT ${EMPRESA.nit} | ${EMPRESA.direccion}`, margenX, pageHeight - 8);
-    doc.text(`Pág ${i} de ${totalPaginas}`, pageWidth - margenX, pageHeight - 8, { align:'right' });
-    doc.setFontSize(6); doc.setTextColor(120,120,120);
-    doc.text('Este documento es confidencial y de uso exclusivo para el SAGRILAFT de TI Cargo', pageWidth/2, pageHeight - 4, { align:'center' });
+  c.y += (o.after != null ? o.after : 3);
+}
+function bullet(c, t, o) {
+  o = o || {};
+  const size = o.size || c.fs;
+  ensure(c, size * 1.3);
+  c.doc.setFont('helvetica', 'normal'); c.doc.setFontSize(size); c.doc.setTextColor(INK[0], INK[1], INK[2]);
+  c.doc.text(o.mark || '-', PM + 8, c.y + size);
+  para(c, t, Object.assign({}, o, { indent: 22 }));
+}
+// cells: [{t,w,b,fill,color,align}] w en fraccion
+function row(c, cells, o) {
+  o = o || {};
+  const size = o.size || c.fs, pad = 3, lh = size * 1.25;
+  const L = cells.map(ce => wrap(c, ce.t, ce.w * PW - pad * 2, size, ce.b));
+  const h = Math.max(o.minH || 0, Math.max.apply(null, L.map(l => l.length)) * lh + pad * 2);
+  ensure(c, h);
+  let x = PM;
+  cells.forEach((ce, i) => {
+    const cw = ce.w * PW;
+    c.doc.setDrawColor(110, 110, 110); c.doc.setLineWidth(.5);
+    if (ce.fill) { c.doc.setFillColor(ce.fill[0], ce.fill[1], ce.fill[2]); c.doc.rect(x, c.y, cw, h, 'FD'); } else c.doc.rect(x, c.y, cw, h);
+    c.doc.setFont('helvetica', ce.b ? 'bold' : 'normal'); c.doc.setFontSize(size);
+    const col = ce.color || INK; c.doc.setTextColor(col[0], col[1], col[2]);
+    const tx = ce.align === 'center' ? x + cw / 2 : x + pad;
+    L[i].forEach((ln, k) => c.doc.text(ln, tx, c.y + pad + size + k * lh - 1, { align: ce.align === 'center' ? 'center' : 'left' }));
+    x += cw;
+  });
+  c.y += h;
+}
+function bar(c, title) {
+  gap(c, 4);
+  row(c, [{ t: title, w: 1, b: true, fill: RED, color: [255, 255, 255] }], { size: c.fs + 0.5 });
+}
+// pares [[label,valor],...] en n columnas
+function kv(c, pairs, cols) {
+  cols = cols || 2;
+  const lw = cols === 1 ? 0.3 : cols === 2 ? 0.17 : 0.11, vw = cols === 1 ? 0.7 : cols === 2 ? 0.33 : 0.2233;
+  for (let i = 0; i < pairs.length; i += cols) {
+    const cells = [];
+    for (let j = 0; j < cols; j++) {
+      const p = pairs[i + j];
+      cells.push({ t: p ? p[0] : '', w: lw, b: true, fill: GRAYF });
+      cells.push({ t: p ? p[1] : '', w: vw });
+    }
+    row(c, cells);
   }
+}
+// tabla con encabezados; widths fracciones; rows arrays de strings
+function tbl(c, headers, widths, rows, minRows) {
+  row(c, headers.map((h, i) => ({ t: h, w: widths[i], b: true, fill: GRAYF, align: 'center' })));
+  const data = rows.slice();
+  while (data.length < (minRows || 0)) data.push(headers.map(() => ''));
+  data.forEach(r => row(c, r.map((t, i) => ({ t: t, w: widths[i] }))));
+}
+const chk = (v) => v ? '[X]' : '[  ]';
+const yn = (v) => v === 'Sí' ? 'SI [X]  NO [  ]' : v === 'No' ? 'SI [  ]  NO [X]' : 'SI [  ]  NO [  ]';
 
-  if (descargar) {
-    doc.save(`${config.codigo}_${slug}_${new Date().getTime()}.pdf`);
-    return null;
-  }
-  return doc.output('datauristring');
+function sigBlocks(c, blocks, o) {
+  o = o || {};
+  ensure(c, 100);
+  gap(c, 36);
+  const n = blocks.length, bw = PW / n;
+  blocks.forEach((b, i) => {
+    const x = PM + i * bw;
+    c.doc.setDrawColor(29, 29, 27); c.doc.setLineWidth(.7);
+    c.doc.line(x + 12, c.y, x + bw - 12, c.y);
+    let yy = c.y + 11;
+    b.forEach((ln, k) => {
+      c.doc.setFont('helvetica', k === 0 ? 'bold' : 'normal'); c.doc.setFontSize(8); c.doc.setTextColor(29, 29, 27);
+      c.doc.splitTextToSize(S(ln), bw - 24).forEach(sl => { c.doc.text(sl, x + 12, yy); yy += 10; });
+    });
+  });
+  c.y += 70;
+}
+function drawHeader(c, page, total) {
+  const d = c.doc, m = c.meta, x0 = PM, y0 = 30, h = 72;
+  d.setDrawColor(60, 60, 60); d.setLineWidth(.8);
+  d.rect(x0, y0, PW, h);
+  d.line(x0 + 130, y0, x0 + 130, y0 + h); d.line(x0 + 372, y0, x0 + 372, y0 + h);
+  d.setFillColor(RED[0], RED[1], RED[2]); d.rect(x0 + 1, y0 + 1, 128, 5, 'F');
+  d.setFont('helvetica', 'bold'); d.setFontSize(22); d.setTextColor(RED[0], RED[1], RED[2]);
+  d.text('TI CARGO', x0 + 65, y0 + 36, { align: 'center' });
+  d.setFontSize(6.5); d.setTextColor(INK[0], INK[1], INK[2]);
+  d.text('TRANSINTERNATIONAL', x0 + 65, y0 + 49, { align: 'center' });
+  d.text('CARGO S.A.S.', x0 + 65, y0 + 58, { align: 'center' });
+  d.setFont('helvetica', 'bold'); d.setFontSize(8);
+  d.text(S(m.tipo), x0 + 251, y0 + 13, { align: 'center' });
+  d.setFont('helvetica', 'normal'); d.setFontSize(7.5);
+  d.text(S(m.area), x0 + 251, y0 + 24, { align: 'center' });
+  d.setFont('helvetica', 'bold'); d.setFontSize(9);
+  const tl = d.splitTextToSize(S(m.titulo), 226);
+  tl.forEach((l, i) => d.text(l, x0 + 251, y0 + 38 + i * 11, { align: 'center' }));
+  const rows = ['CÓDIGO: ' + m.codigo, 'VERSIÓN: ' + m.version, m.fechaLabel + ': ' + m.fecha, 'PÁGINA: ' + page + ' de ' + total];
+  rows.forEach((r, k) => {
+    if (k) d.line(x0 + 372, y0 + k * 18, x0 + PW, y0 + k * 18);
+    d.setFont('helvetica', 'bold'); d.setFontSize(7.5); d.text(S(r), x0 + 377, y0 + k * 18 + 12);
+  });
+  // pie
+  d.setFont('helvetica', 'normal'); d.setFontSize(6.5); d.setTextColor(110, 110, 110);
+  d.text(S(CO.nombre + ' - NIT ' + CO.nit + ' - ' + CO.dir + ' - Tel ' + CO.tel + ' - ' + CO.email), PM + PW / 2, 770, { align: 'center' });
+}
+function finalize(c) {
+  const n = c.doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) { c.doc.setPage(i); drawHeader(c, i, n); }
+  return c.doc;
+}
+const B = function () { for (let i = 0; i < arguments.length; i++) { const x = arguments[i]; if (x !== undefined && x !== null && x !== '') return String(x); } return ''; };
+const LINE = '______________________';
+
+/* ---------- PDF 1: MANDATO COMERCIAL ---------- */
+function pdfMandato(f) {
+  const c = newPDF({ tipo: 'DOCUMENTO ESPECIAL', area: 'GESTIÓN OPERATIVA Y COMERCIAL', titulo: 'MANDATO COMERCIAL CON REPRESENTACIÓN', codigo: 'DE-GOC-002', version: '03', fechaLabel: 'FECHA DE APROBACIÓN', fecha: '30-01-2026' });
+  c.fs = 11.5;
+  const rep = f.reps[0] || {};
+  const ciudad = B(f.firma.ciudad, B(f.contacto.ciudad, 'Cali'));
+  const razon = B(f.gen.razon, LINE), nit = B(f.gen.nit, LINE), nom = B(rep.nombre, LINE), cc = B(rep.numDoc, LINE), lug = B(rep.lugarExp, LINE);
+  para(c, ciudad + ', ' + fmtLong(f.firma.fecha), { after: 10 });
+  para(c, 'Señores', { after: 0 }); para(c, CO.nombre, { bold: true, after: 0 }); para(c, 'NIT ' + CO.nit, { after: 0 }); para(c, CO.dir, { after: 10 });
+  para(c, 'REF.: MANDATO COMERCIAL CON REPRESENTACIÓN PARA LA GESTIÓN DE OPERACIONES DE COMERCIO EXTERIOR Y LOGÍSTICA INTERNACIONAL', { bold: true, after: 10 });
+  para(c, 'Respetados señores:', { after: 6 });
+  para(c, 'Yo, ' + nom + ', identificado(a) con ' + B(rep.tipoDoc, 'C.C.') + ' No. ' + cc + ' expedida en ' + lug + ', actuando en nombre y representación legal de la sociedad ' + razon + ', identificada con NIT ' + nit + ', domiciliada en ' + B(f.contacto.ciudad, LINE) + ', quien en adelante se denominará EL MANDANTE, por medio del presente documento confiero MANDATO COMERCIAL CON REPRESENTACIÓN a la sociedad ' + CO.nombre + ', identificada con NIT ' + CO.nit + ', representada legalmente por ' + CO.rep + ', quien en adelante se denominará EL MANDATARIO, de conformidad con lo establecido en los artículos 1262 y siguientes del Código de Comercio, bajo las siguientes cláusulas:', { after: 6 });
+  const cl = [
+    ['PRIMERA - OBJETO.', 'EL MANDANTE encomienda a EL MANDATARIO la gestión de los negocios relacionados con la coordinación, contratación y ejecución de servicios de transporte internacional de carga (aéreo, marítimo y terrestre), agenciamiento de carga, consolidación y desconsolidación, almacenamiento, trámites de nacionalización y exportación, y demás actividades conexas a las operaciones de comercio exterior de EL MANDANTE.'],
+    ['SEGUNDA - FACULTADES.', 'En desarrollo del mandato, EL MANDATARIO queda facultado para: a) Solicitar, negociar y contratar espacios, fletes y servicios con navieras, aerolíneas, transportadores terrestres, depósitos, puertos, aeropuertos y demás operadores logísticos. b) Representar a EL MANDANTE ante las autoridades aduaneras, portuarias, sanitarias y de control, incluida la Dirección de Impuestos y Aduanas Nacionales (DIAN), el ICA, el INVIMA y las sociedades portuarias. c) Suscribir, endosar, recibir y entregar documentos de transporte, manifiestos, guías, conocimientos de embarque y demás documentos requeridos. d) Realizar los pagos de fletes, tarifas, tributos y gastos que sean necesarios para la operación, con cargo a EL MANDANTE. e) Contratar, en nombre de EL MANDANTE, los servicios de agencias de aduanas, aseguradoras y demás terceros que se requieran. f) Presentar reclamaciones, solicitudes y recursos a que haya lugar.'],
+    ['TERCERA - OBLIGACIONES DEL MANDATARIO.', 'EL MANDATARIO se obliga a: a) Ejecutar el mandato con la diligencia y cuidado de un buen hombre de negocios. b) Informar oportunamente a EL MANDANTE sobre el estado de las operaciones y cualquier novedad relevante. c) Rendir cuentas de su gestión cuando EL MANDANTE lo solicite. d) Guardar la debida reserva sobre la información comercial y financiera conocida con ocasión del mandato. e) Dar cumplimiento a las normas de prevención del lavado de activos, financiación del terrorismo y financiamiento de la proliferación de armas de destrucción masiva (SAGRILAFT).'],
+    ['CUARTA - OBLIGACIONES DEL MANDANTE.', 'EL MANDANTE se obliga a: a) Suministrar de manera veraz, completa y oportuna la información y documentación requerida para cada operación. b) Responder por la naturaleza, cantidad, peso, valor, clasificación arancelaria y legalidad de las mercancías. c) Pagar oportunamente los fletes, tarifas, gastos, tributos y honorarios causados. d) Garantizar que la mercancía no contiene sustancias ilícitas, estupefacientes, armas, explosivos u otros bienes prohibidos. e) Mantener actualizada la información suministrada para su vinculación, al menos una vez al año o cuando se presenten cambios relevantes. f) Cumplir con las normas de control y seguridad de la cadena de suministro.'],
+    ['QUINTA - REMUNERACIÓN.', 'EL MANDANTE reconocerá a EL MANDATARIO los honorarios, comisiones y tarifas pactados en las cotizaciones o acuerdos comerciales aceptados por las partes, así como el reembolso de los gastos en que incurra por cuenta de EL MANDANTE en ejecución del mandato. El impuesto sobre las ventas y demás tributos aplicables serán a cargo de EL MANDANTE.'],
+    ['SEXTA - RESPONSABILIDAD.', 'EL MANDATARIO responderá por los perjuicios que cause a EL MANDANTE por culpa en la ejecución del mandato, sin que en ningún caso su responsabilidad exceda los límites establecidos en las condiciones generales de servicio y en los convenios internacionales y normas aplicables al modo de transporte. EL MANDATARIO no será responsable por demoras o daños derivados de caso fortuito, fuerza mayor, hecho de un tercero, vicio propio de la mercancía, embalaje inadecuado o información inexacta suministrada por EL MANDANTE.'],
+    ['SÉPTIMA - DECLARACIÓN DE ORIGEN LÍCITO.', 'EL MANDANTE declara que los recursos con los que realiza sus operaciones provienen de actividades lícitas y que no se encuentran vinculados con actividades de lavado de activos, financiación del terrorismo o financiamiento de la proliferación de armas de destrucción masiva. Autoriza a EL MANDATARIO a consultar sus datos en listas restrictivas y vinculantes (OFAC, ONU, Unión Europea y demás), y a suspender o terminar la relación si se encuentra coincidencia o información contradictoria.'],
+    ['OCTAVA - DURACIÓN Y TERMINACIÓN.', 'El presente mandato tendrá vigencia indefinida a partir de su firma y podrá darse por terminado por cualquiera de las partes mediante comunicación escrita con treinta (30) días calendario de anticipación, sin perjuicio de la ejecución y liquidación de las operaciones en curso. EL MANDATARIO podrá terminarlo de manera inmediata en caso de incumplimiento de las obligaciones de EL MANDANTE, falta de actualización de la información SAGRILAFT, o reporte en listas restrictivas.'],
+    ['NOVENA - TRATAMIENTO DE DATOS PERSONALES.', 'EL MANDANTE autoriza a EL MANDATARIO para el tratamiento de los datos personales suministrados, de conformidad con la Ley 1581 de 2012 y el Decreto 1377 de 2013, con la finalidad de ejecutar el presente mandato y cumplir las obligaciones legales y regulatorias.'],
+    ['DÉCIMA - LEY APLICABLE Y SOLUCIÓN DE CONTROVERSIAS.', 'El presente mandato se rige por las leyes de la República de Colombia. Las diferencias que surjan entre las partes se intentarán resolver de manera directa y, de no ser posible, se someterán a la jurisdicción de los jueces competentes de la ciudad de Cali.']
+  ];
+  cl.forEach(x => { para(c, x[0] + ' ' + x[1], { after: 6 }); });
+  para(c, 'Para constancia se firma en ' + ciudad + ', a los ' + fmtLong(f.firma.fecha) + '.', { after: 6 });
+  para(c, 'Atentamente,', { after: 0 });
+  sigBlocks(c, [
+    ['EL MANDANTE', nom, B(rep.tipoDoc, 'C.C.') + ' No. ' + cc, 'Representante Legal', razon, 'NIT ' + nit],
+    ['EL MANDATARIO', CO.rep, 'Representante Legal', CO.nombre, 'NIT ' + CO.nit]
+  ]);
+  return finalize(c);
+}
+
+/* ---------- PDF 2: ACUERDO DE SEGURIDAD ---------- */
+function pdfAcuerdo(f) {
+  const c = newPDF({ tipo: 'DOCUMENTO ESPECIAL', area: 'GESTIÓN OPERATIVA Y COMERCIAL', titulo: 'ACUERDO DE SEGURIDAD - IDENTIFICACIÓN ASOCIADO DE NEGOCIO', codigo: 'DE-GOC-0010', version: '03', fechaLabel: 'FECHA DE APROBACIÓN', fecha: '25-10-2025' });
+  c.fs = 9;
+  const rep = f.reps[0] || {};
+  const ct = f.contactos[0] || {};
+  para(c, 'ACUERDO DE SEGURIDAD', { bold: true, size: 12, align: 'center', after: 6 });
+  kv(c, [
+    ['Ciudad y fecha', B(f.firma.ciudad, f.contacto.ciudad) + ', ' + fmtDate(f.firma.fecha)],
+    ['Razón social', f.gen.razon],
+    ['NIT', f.gen.nit], ['Dirección', f.contacto.dir],
+    ['Ciudad', f.contacto.ciudad], ['Teléfono', B(f.contacto.tel, f.contacto.cel)],
+    ['Email', f.contacto.email], ['Representante legal', rep.nombre],
+    ['Contacto', ct.nombre], ['Cargo/Rol', ct.rol],
+    ['Tel. contacto', ct.tel], ['Email contacto', ct.email]
+  ], 2);
+  gap(c, 8);
+  para(c, 'Entre ' + CO.nombre + ' (en adelante TI CARGO), con NIT ' + CO.nit + ', y ' + B(f.gen.razon, LINE) + ' (en adelante EL ASOCIADO DE NEGOCIO), con NIT ' + B(f.gen.nit, LINE) + ', se celebra el presente Acuerdo de Seguridad, con el fin de proteger la cadena de suministro internacional, prevenir el uso de las operaciones de comercio exterior para actividades ilícitas (narcotráfico, contrabando, lavado de activos, financiación del terrorismo, financiamiento de la proliferación de armas de destrucción masiva, tráfico de armas y personas) y fortalecer los controles de seguridad de ambas partes, en línea con los estándares BASC y OEA. Para ello, EL ASOCIADO DE NEGOCIO se compromete a:', { after: 5 });
+  const comp = [
+    'Cumplir las normas legales vigentes en materia de comercio exterior, aduanas, transporte, seguridad de la cadena logística y prevención de LA/FT/FPADM.',
+    'Mantener controles de acceso a sus instalaciones, con registro de ingreso y salida de personas, vehículos y mercancías.',
+    'Aplicar procedimientos de selección y contratación de personal, incluida la verificación de antecedentes, referencias y estudios de seguridad, y mantener controles de sostenimiento para cargos críticos.',
+    'Adoptar medidas para evitar la contaminación de la carga con sustancias ilícitas, explosivos, armas, dinero en efectivo no declarado o mercancías no declaradas.',
+    'Verificar la identidad y antecedentes de sus propios clientes, proveedores, transportadores y demás asociados de negocio, conservando los soportes de dicha verificación.',
+    'Garantizar la integridad de la carga: embalaje, marcado, pesaje, aplicación y verificación de sellos y precintos de seguridad en las unidades de carga.',
+    'Suministrar información veraz, completa y oportuna sobre la mercancía, su origen, destino, valor, naturaleza y las personas que intervienen en la operación.',
+    'Proteger la confidencialidad e integridad de la información y los documentos de comercio exterior, así como los sistemas informáticos que los soportan.',
+    'Reportar de inmediato a TI CARGO y a las autoridades competentes cualquier actividad sospechosa, irregular o ilícita detectada en la operación.',
+    'Capacitar periódicamente a su personal en seguridad de la cadena de suministro, prevención de LA/FT/FPADM y reporte de operaciones sospechosas.',
+    'Permitir a TI CARGO la realización de visitas de verificación a sus instalaciones, con previo aviso, y atender las recomendaciones que resulten de ellas.',
+    'Informar por escrito a TI CARGO cualquier cambio en su representación legal, composición accionaria, domicilio, actividad económica o datos de contacto, y actualizar su información al menos una vez al año.',
+    'Abstenerse de recibir, transportar o gestionar mercancías o recursos de origen ilícito o de personas incluidas en listas restrictivas (OFAC, ONU, Unión Europea y otras).',
+    'Conservar los documentos soporte de las operaciones por el término mínimo exigido por la ley (cinco años o el que disponga la normativa aplicable).'
+  ];
+  comp.forEach((t, i) => bullet(c, t, { mark: (i + 1) + '.' }));
+  gap(c, 4);
+  para(c, 'COMPROMISOS DE TI CARGO', { bold: true, after: 3 });
+  para(c, 'Por su parte, TI CARGO se compromete a:', { after: 3 });
+  [
+    'Mantener un sistema de gestión de seguridad y de prevención de LA/FT/FPADM (SAGRILAFT) conforme a la normatividad vigente.',
+    'Tratar la información suministrada por EL ASOCIADO DE NEGOCIO de manera confidencial, conforme a la Ley 1581 de 2012.',
+    'Ejecutar las operaciones con personal idóneo, controles de seguridad y trazabilidad en el manejo de la carga y los documentos.',
+    'Informar oportunamente a EL ASOCIADO DE NEGOCIO sobre cualquier novedad o riesgo de seguridad que afecte su operación.',
+    'Atender las inquietudes y reportes de seguridad que EL ASOCIADO DE NEGOCIO presente, y dar trámite ante las autoridades cuando corresponda.',
+    'Capacitar a su personal y mantener los controles de seguridad definidos en su sistema de gestión (BASC).'
+  ].forEach((t, i) => bullet(c, t, { mark: String.fromCharCode(97 + i) + ')' }));
+  gap(c, 4);
+  para(c, 'El incumplimiento de este acuerdo faculta a TI CARGO para suspender o terminar la relación comercial. Para constancia se firma en ' + B(f.firma.ciudad, f.contacto.ciudad, 'Cali') + ', el ' + fmtLong(f.firma.fecha) + '.', { after: 4 });
+  sigBlocks(c, [
+    [CO.rep, 'Representante Legal', CO.nombre, 'NIT ' + CO.nit],
+    [B(rep.nombre, 'Gerente General / Representante Legal'), 'Gerente General / Representante Legal', B(f.gen.razon), 'NIT ' + B(f.gen.nit)]
+  ]);
+  return finalize(c);
+}
+
+/* ---------- PDF 3: VISITA DE SEGURIDAD ---------- */
+function pdfVisita(f) {
+  const c = newPDF({ tipo: 'FORMATO', area: 'GESTIÓN DOCUMENTAL', titulo: 'VISITA DE SEGURIDAD CLIENTES Y PROVEEDORES', codigo: 'FO-GD-004', version: '03', fechaLabel: 'VIGENCIA', fecha: '25-10-2025' });
+  c.fs = 8.5;
+  const rep = f.reps[0] || {};
+  const v = f.visita;
+  bar(c, 'DATOS ASOCIADO DE NEGOCIO');
+  kv(c, [
+    ['Fecha de visita', fmtDate(B(v.fecha, f.firma.fecha))], ['Ciudad', B(f.contacto.ciudad)],
+    ['Razón social', f.gen.razon], ['NIT', f.gen.nit],
+    ['Dirección', f.contacto.dir], ['Teléfono', B(f.contacto.tel, f.contacto.cel)],
+    ['Representante legal', rep.nombre], ['Documento', B(rep.tipoDoc) + ' ' + B(rep.numDoc)],
+    ['Email', f.contacto.email], ['Actividad económica', B(f.gen.actividad, f.gen.objeto)],
+    ['Sitio web', f.contacto.web], ['CIIU', f.gen.ciiu]
+  ], 2);
+  bar(c, 'PRODUCTOS QUE IMPORTA / EXPORTA');
+  const imp = f.comex.imports.filter(x => x.p), exp = f.comex.exports.filter(x => x.p);
+  const n = Math.max(imp.length, exp.length, 3), rows = [];
+  for (let i = 0; i < n; i++) rows.push([String(i + 1), B((imp[i] || {}).p), B((exp[i] || {}).p)]);
+  tbl(c, ['No.', 'Productos que importa', 'Productos que exporta'], [0.08, 0.46, 0.46], rows);
+  bar(c, 'ORIGEN DE RECURSOS');
+  row(c, [{ t: B(f.fin.origen), w: 1 }], { minH: 24 });
+  bar(c, 'PERSONA QUE ATIENDE LA VISITA');
+  kv(c, [['Nombre', v.atiende], ['Cargo', v.cargoAtiende]], 2);
+  bar(c, 'INFRAESTRUCTURA Y CONTROLES DE SEGURIDAD');
+  row(c, [{ t: 'No.', w: 0.06, b: true, fill: GRAYF, align: 'center' }, { t: 'Pregunta', w: 0.44, b: true, fill: GRAYF }, { t: 'SI / NO / N.A.', w: 0.14, b: true, fill: GRAYF, align: 'center' }, { t: 'Observaciones', w: 0.36, b: true, fill: GRAYF }]);
+  VISITA_Q.forEach((q, i) => {
+    const a = v.q[i + 1] || { r: '', obs: '' };
+    const r = a.r === 'Sí' ? 'SI' : a.r === 'No' ? 'NO' : a.r === 'N.A.' ? 'N.A.' : '';
+    row(c, [{ t: String(i + 1), w: 0.06, align: 'center' }, { t: q, w: 0.44 }, { t: r, w: 0.14, align: 'center', b: true }, { t: a.obs, w: 0.36 }]);
+  });
+  bar(c, 'DECLARACIÓN');
+  gap(c, 3);
+  para(c, 'Declaro que la información consignada en este formato es veraz y fue verificada durante la visita realizada a las instalaciones. Autorizo a ' + CO.nombre + ' para verificar la información suministrada y para realizar visitas de seguimiento cuando lo considere necesario.', { after: 2 });
+  sigBlocks(c, [
+    [B(f.firma.nombre, B(v.atiende)), 'Cargo: ' + B(f.firma.cargo, v.cargoAtiende), 'Doc: ' + B(f.firma.doc), B(f.gen.razon), 'Quien atiende la visita'],
+    [CO.oficial, 'Oficial de Cumplimiento', CO.nombre, 'Quien realiza la visita']
+  ]);
+  return finalize(c);
+}
+
+/* ---------- PDF 4: VINCULACION CIRCULAR 170 ---------- */
+function pdfVinculacion(f, tipoVinc) {
+  const c = newPDF({ tipo: 'FORMATO', area: 'GESTIÓN DE CUMPLIMIENTO, OPERATIVA Y COMERCIAL', titulo: 'FORMULARIO DE VINCULACIÓN, ACTUALIZACIÓN Y CONOCIMIENTO DEL CLIENTE - CIRCULAR 0170', codigo: 'FO-GIN-001', version: '04', fechaLabel: 'FECHA DE APROBACIÓN', fecha: '25-10-2025' });
+  c.fs = 7.5;
+  const g = f.gen, ct = f.contacto, fi = f.fin;
+  const tv = tipoVinc || 'Nueva';
+  para(c, 'Tipo de vinculación:   ' + chk(tv === 'Nueva') + ' Vinculación nueva     ' + chk(tv !== 'Nueva') + ' Actualización        Fecha de diligenciamiento: ' + fmtDate(f.firma.fecha), { bold: true, after: 2 });
+  bar(c, '1. INFORMACIÓN GENERAL DEL CLIENTE');
+  kv(c, [
+    ['Razón social', g.razon], ['NIT', g.nit], ['Nombre comercial', g.comercial], ['Tipo de sociedad', g.tipoSoc],
+    ['Fecha constitución', fmtDate(g.fechaConst)], ['Lugar constitución', g.lugarConst], ['Código CIIU', g.ciiu], ['Sitio web', ct.web],
+    ['Dirección', ct.dir], ['Ciudad / Depto.', B(ct.ciudad) + ' / ' + B(ct.depto)], ['País', ct.pais], ['Teléfono / Celular', B(ct.tel) + ' / ' + B(ct.cel)],
+    ['Email corporativo', ct.email], ['Objeto social', g.objeto]
+  ], 2);
+  kv(c, [['Actividad económica', g.actividad]], 1);
+  bar(c, '2. REPRESENTANTES LEGALES');
+  tbl(c, ['Nombres y apellidos', 'Tipo doc.', 'No. documento', 'Expedición', 'PEP', 'Cargo / entidad PEP'], [0.26, 0.08, 0.15, 0.2, 0.06, 0.25],
+    f.reps.map(r => [r.nombre, r.tipoDoc, r.numDoc, B(fmtDate(r.fechaExp)) + ' ' + B(r.lugarExp), r.pep, r.pep === 'Sí' ? B(r.pepCargo) + ' - ' + B(r.pepEntidad) : '']), 2);
+  bar(c, '3. SISTEMAS DE CALIDAD Y SEGURIDAD');
+  kv(c, [
+    ['¿Sistema de gestión certificado?', B(f.calidad.sgc) + (f.calidad.sgc === 'Sí' ? ' - ' + B(f.calidad.sgcCual) : '')],
+    ['¿Certificación BASC / OEA?', B(f.calidad.basc) + (f.calidad.basc === 'Sí' ? ' - ' + B(f.calidad.bascCual) : '')],
+  ], 2);
+  kv(c, [['Controles de seguridad', f.calidad.controles]], 1);
+  bar(c, '4. COMPOSICIÓN ACCIONARIA / BENEFICIARIOS FINALES');
+  tbl(c, ['Nombre o razón social', 'Tipo doc.', 'No. documento', '% Part.', 'PEP', 'País residencia'], [0.32, 0.09, 0.17, 0.09, 0.07, 0.26],
+    f.accionistas.map(a => [a.nombre, a.tipoDoc, a.numDoc, B(a.porc) + (a.porc ? '%' : ''), a.pep, a.pais]), 3);
+  bar(c, '5. PERSONAS EXPUESTAS POLÍTICAMENTE (PEP)');
+  const peps = f.reps.filter(r => r.pep === 'Sí').map(r => ['Rep. legal', r.nombre, r.pepCargo, r.pepEntidad, fmtDate(r.pepVinc) + ' / ' + fmtDate(r.pepDesvinc)])
+    .concat(f.accionistas.filter(a => a.pep === 'Sí').map(a => ['Accionista', a.nombre, '', '', '']));
+  if (peps.length) tbl(c, ['Vínculo', 'Nombre', 'Cargo', 'Entidad', 'Vinculación / Desvinculación'], [0.12, 0.28, 0.18, 0.2, 0.22], peps);
+  else row(c, [{ t: 'Declara que ni sus representantes legales ni sus accionistas o beneficiarios finales son Personas Expuestas Políticamente (PEP).', w: 1 }]);
+  bar(c, '6. INFORMACIÓN FINANCIERA Y TRIBUTARIA');
+  kv(c, [
+    ['Capital social', money(fi.capital)], ['Código CIIU', B(fi.ciiu, g.ciiu)],
+    ['Total activos', money(fi.activos)], ['Total pasivos', money(fi.pasivos)],
+    ['Total patrimonio', money(patrimonio(f))], ['Ingresos operacionales', money(fi.ingresos)],
+    ['Total egresos', money(fi.egresos)], ['Otros ingresos', money(fi.otrosIngresos)],
+    ['Régimen IVA', fi.ivaReg], ['Gran contribuyente', fi.granContrib],
+    ['Autorretenedor', fi.autorret], ['Agente de retención', fi.agenteRet]
+  ], 2);
+  kv(c, [['Origen de fondos', fi.origen]], 1);
+  bar(c, '7. OPERACIONES DE COMERCIO EXTERIOR');
+  kv(c, [
+    ['Productos que importa', f.comex.imports.filter(x => x.p).map(x => x.p).join('; ')],
+    ['Productos que exporta', f.comex.exports.filter(x => x.p).map(x => x.p).join('; ')],
+    ['Medios de pago', MEDIOS_PAGO.filter(m => f.comex.pagos[m]).map(m => m === 'Otro' && f.comex.otroPago ? 'Otro: ' + f.comex.otroPago : m).join(', ')]
+  ], 1);
+  tbl(c, ['Persona que realiza operaciones', 'Documento', 'Teléfono', 'Dirección', 'Email'], [0.25, 0.16, 0.14, 0.22, 0.23], f.comex.personas.map(p => [p.nombre, p.doc, p.tel, p.dir, p.email]), 1);
+  const bn = f.comex.banco;
+  kv(c, [['Banco comex', bn.nombre], ['No. cuenta', bn.cuenta], ['Teléfono', bn.tel], ['País', bn.pais]], 2);
+  bar(c, '8. PERSONAS DE CONTACTO');
+  tbl(c, ['Responsable / Rol', 'Nombre y apellido', 'Teléfono', 'Email'], [0.25, 0.3, 0.17, 0.28], f.contactos.map(p => [p.rol, p.nombre, p.tel, p.email]), 2);
+  bar(c, '9. CLIENTES Y PROVEEDORES PRINCIPALES');
+  tbl(c, ['Cliente', 'Identificación', 'Dirección'], [0.38, 0.22, 0.4], f.clientes.map(p => [p.nombre, p.id, p.dir]), 2);
+  tbl(c, ['Proveedor', 'Identificación', 'Dirección'], [0.38, 0.22, 0.4], f.proveedores.map(p => [p.nombre, p.id, p.dir]), 2);
+  bar(c, '10. REFERENCIAS');
+  tbl(c, ['Referencia comercial', 'Identificación', 'Teléfono'], [0.45, 0.3, 0.25], f.refCom.map(p => [p.nombre, p.id, p.tel]), 2);
+  tbl(c, ['Entidad bancaria', 'Tipo de cuenta', 'No. de cuenta', 'Teléfono'], [0.34, 0.2, 0.26, 0.2], f.refBanc.map(p => [p.entidad, p.tipo, p.cuenta, p.tel]), 2);
+  bar(c, '11. MANIFESTACIÓN JURADA');
+  gap(c, 2);
+  para(c, 'En mi calidad de representante legal, manifiesto bajo la gravedad del juramento que: ' + chk(f.decl.fondos) + ' Los recursos que maneja la empresa provienen de actividades lícitas y no están relacionados con LA/FT/FPADM. ' + chk(f.decl.listas) + ' Autorizo la consulta en listas restrictivas y vinculantes (OFAC, ONU, Unión Europea y demás). ' + chk(f.decl.datos) + ' Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012. ' + chk(f.decl.basc) + ' Me comprometo a cumplir los compromisos de seguridad BASC. Toda la información suministrada es veraz, verificable y me comprometo a actualizarla como mínimo una vez al año o cuando se presenten cambios.', { after: 3 });
+  bar(c, '12. ACUERDOS Y FIRMAS');
+  gap(c, 2);
+  para(c, 'Con la firma del presente documento acepto las condiciones del acuerdo de seguridad, el mandato comercial y las políticas de TI CARGO en materia de prevención de lavado de activos y financiación del terrorismo.', { after: 0 });
+  sigBlocks(c, [
+    [B(f.firma.nombre, B((f.reps[0] || {}).nombre)), 'C.C. / Doc. ' + B(f.firma.doc, B((f.reps[0] || {}).numDoc)), 'Cargo: ' + B(f.firma.cargo), 'Ciudad: ' + B(f.firma.ciudad) + '  Fecha: ' + fmtDate(f.firma.fecha), 'Firma y huella del cliente'],
+    [CO.oficial, 'Oficial de Cumplimiento', CO.nombre, 'Revisó y aprobó vinculación']
+  ]);
+  bar(c, '13. DOCUMENTACIÓN REQUERIDA');
+  gap(c, 2);
+  DOCS_REQ.forEach((d, i) => bullet(c, d.label, { mark: '[  ]', size: 7.5, after: 1 }));
+  return finalize(c);
+}
+
+const PDF_GEN = {
+  mandato: (f) => pdfMandato(f),
+  acuerdo: (f) => pdfAcuerdo(f),
+  visita: (f) => pdfVisita(f),
+  vinculacion: (f, tipo) => pdfVinculacion(f, tipo)
+};
+function downloadPDF(key, f, tipo) {
+  const meta = GEN_DOCS.find(d => d.key === key);
+  const doc = PDF_GEN[key](f, tipo);
+  doc.save(meta.file + '_' + (normNit(f.gen.nit) || 'cliente') + '.pdf');
 }
 </script>
 
+<!-- ============ BLOQUE 3: COMPONENTES DE FORMULARIO ============ -->
 <script type="text/babel" data-presets="react">
-/* ============================================================
-   7. VALIDACIÓN GENÉRICA POR SECCIÓN
-   ============================================================ */
-function validarSeccion(fields, datos) {
-  for (const f of fields) {
-    if (f.showIf && !f.showIf(datos)) continue;
-    if (f.type === 'dynamicList' || f.type === 'matrix' || f.type === 'staticText' || f.type === 'signature') continue;
-    if (!f.required) continue;
-    const val = getPath(datos, f.name);
-    if (f.type === 'checkbox' && !val) return `Debe aceptar: "${f.label.slice(0, 70)}..."`;
-    if (f.type === 'checkboxGroup' && (!val || val.length === 0)) return `Seleccione al menos una opción en "${f.label}"`;
-    if (f.type === 'currency' && (val === undefined || val === null)) return `Complete el campo "${f.label}"`;
-    if (['text','email','url','textarea','date','select','radio','number'].includes(f.type) && (val === undefined || val === null || val === '')) {
-      return `Complete el campo "${f.label}"`;
-    }
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-[#C1272D] bg-white disabled:bg-gray-100 disabled:text-gray-600';
+
+function Field({ label, value, onChange, type, options, rows, span, placeholder, readOnly, hint }) {
+  const sp = span === 3 ? 'md:col-span-3' : span === 2 ? 'md:col-span-2' : '';
+  let el;
+  if (options) {
+    el = (<select className={inputCls} value={value || ''} onChange={e => onChange(e.target.value)} disabled={readOnly}>
+      <option value="">Seleccione...</option>{options.map(o => <option key={o} value={o}>{o}</option>)}</select>);
+  } else if (rows) {
+    el = <textarea className={inputCls} rows={rows} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)} disabled={readOnly} />;
+  } else {
+    el = <input className={inputCls} type={type || 'text'} value={value == null ? '' : value} placeholder={placeholder} onChange={e => onChange(e.target.value)} disabled={readOnly} />;
   }
-  return null;
+  return (<label className={'block ' + sp}><span className="block text-xs font-semibold text-gray-600 mb-1">{label}</span>{el}{hint && <span className="block text-[11px] text-gray-400 mt-0.5">{hint}</span>}</label>);
 }
 
-/* ============================================================
-   8. PÁGINA DE FORMULARIO (genérica para los 7)
-   ============================================================ */
-function FormPage({ slug, onVolver }) {
-  const config = FORM_CONFIGS[slug];
-  const [datos, setDatos] = useState(() => config.initial());
-  const [seccionActiva, setSeccionActiva] = useState(0);
-  const [error, setError] = useState('');
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [toast, setToast] = useState('');
-
-  useEffect(() => {
-    const borrador = leerBorrador(config.codigo);
-    if (borrador) {
-      const continuar = window.confirm(`Encontramos un borrador guardado el ${new Date(borrador.savedAt).toLocaleString('es-CO')}. ¿Desea continuar con ese borrador?`);
-      if (continuar) setDatos(borrador.data);
-    }
-    // eslint-disable-next-line
-  }, [slug]);
-
-  function mostrarToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  }
-
-  function set(path, value) {
-    setDatos((prev) => setPath(prev, path, value));
-  }
-
-  function guardarBorradorActual() {
-    guardarBorrador(config.codigo, datos);
-    mostrarToast('Borrador guardado correctamente.');
-  }
-
-  function validarTodo() {
-    for (const s of config.sections) {
-      const msg = validarSeccion(s.fields, datos);
-      if (msg) return msg;
-    }
-    return null;
-  }
-
-  function irSiguiente() {
-    const msg = validarSeccion(config.sections[seccionActiva].fields, datos);
-    if (msg) { setError(msg); return; }
-    setError('');
-    setSeccionActiva((s) => Math.min(config.sections.length - 1, s + 1));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function irAnterior() {
-    setError('');
-    setSeccionActiva((s) => Math.max(0, s - 1));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function onGenerarPdf() {
-    const msg = validarTodo();
-    if (msg) { setError(msg); mostrarToast('Complete los campos obligatorios antes de generar el PDF.'); return; }
-    setError('');
-    generarPdf(slug, datos, true);
-    marcarCompletado(config.codigo);
-    mostrarToast('PDF generado y descargado correctamente.');
-  }
-
-  function onVistaPrevia() {
-    const dataUri = generarPdf(slug, datos, false);
-    setPreviewUrl(dataUri);
-  }
-
-  const seccion = config.sections[seccionActiva];
-  const porcentaje = Math.round(((seccionActiva + 1) / config.sections.length) * 100);
-
-  return (
-    <div>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-ticargo-red">{config.codigo}</p>
-          <h1 className="text-xl font-semibold text-ticargo-black">{config.titulo}</h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={guardarBorradorActual} className="flex items-center gap-1.5 rounded-md border border-ticargo-border bg-white px-3 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray">
-            <IconSave size={15} /> Guardar Borrador
-          </button>
-          <button onClick={onVistaPrevia} className="flex items-center gap-1.5 rounded-md border border-ticargo-border bg-white px-3 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray">
-            <IconEye size={15} /> Vista previa
-          </button>
-          <button onClick={onGenerarPdf} className="flex items-center gap-1.5 rounded-md bg-ticargo-red px-4 py-2 text-sm font-semibold text-white hover:bg-ticargo-redDark">
-            <IconDownload size={15} /> Generar PDF
-          </button>
-        </div>
-      </div>
-
-      {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-ticargo-red">{error}</div>}
-
-      <div className="mb-2 flex items-center justify-between text-xs text-ticargo-black/60">
-        <span>Sección {seccionActiva + 1} de {config.sections.length}</span>
-        <span>{porcentaje}% completado</span>
-      </div>
-      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-ticargo-gray">
-        <div className="h-full bg-ticargo-red transition-all" style={{ width: `${porcentaje}%` }} />
-      </div>
-      <div className="mb-5 flex flex-wrap gap-2">
-        {config.sections.map((s, idx) => (
-          <button key={s.titulo} onClick={() => setSeccionActiva(idx)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${idx===seccionActiva ? 'border-ticargo-red bg-ticargo-red text-white' : idx<seccionActiva ? 'border-green-300 bg-green-50 text-green-700' : 'border-ticargo-border bg-white text-ticargo-black/60'}`}>
-            {idx+1}. {s.titulo}
-          </button>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-ticargo-border bg-white p-5">
-        <h2 className="mb-4 text-base font-semibold text-ticargo-black">{seccion.titulo}</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {seccion.fields.map((field) => <Campo key={field.name} field={field} datos={datos} set={set} />)}
-        </div>
-      </div>
-
-      <div className="mt-4 flex justify-between">
-        <button disabled={seccionActiva===0} onClick={irAnterior} className="flex items-center gap-1 rounded-md border border-ticargo-border px-4 py-2 text-sm font-medium text-ticargo-black/70 hover:bg-ticargo-gray disabled:cursor-not-allowed disabled:opacity-40">
-          <IconChevronLeft size={16} /> Anterior
-        </button>
-        {seccionActiva < config.sections.length - 1 && (
-          <button onClick={irSiguiente} className="flex items-center gap-1 rounded-md bg-ticargo-black px-4 py-2 text-sm font-medium text-white hover:bg-black">
-            Siguiente sección <IconChevronRight size={16} />
-          </button>
-        )}
-      </div>
-
-      {previewUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreviewUrl(null)}>
-          <div className="h-[90vh] w-full max-w-4xl overflow-hidden rounded-lg bg-white" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-ticargo-border px-4 py-2">
-              <p className="text-sm font-semibold text-ticargo-black">Vista previa del PDF</p>
-              <button onClick={() => setPreviewUrl(null)} className="text-ticargo-black/60 hover:text-ticargo-red"><IconX size={18} /></button>
-            </div>
-            <iframe src={previewUrl} className="h-full w-full" title="Vista previa" />
-          </div>
-        </div>
-      )}
-
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-ticargo-black px-4 py-3 text-sm text-white shadow-lg">{toast}</div>
-      )}
+function YN({ label, value, onChange, options, span, readOnly }) {
+  const opts = options || ['Sí', 'No'];
+  const sp = span === 3 ? 'md:col-span-3' : span === 2 ? 'md:col-span-2' : '';
+  return (<div className={sp}>
+    <span className="block text-xs font-semibold text-gray-600 mb-1">{label}</span>
+    <div className="flex gap-2 flex-wrap">
+      {opts.map(o => (<button type="button" key={o} disabled={readOnly} onClick={() => onChange(value === o ? '' : o)}
+        className={'px-4 py-1.5 rounded-full text-sm border transition ' + (value === o ? 'bg-[#C1272D] text-white border-[#C1272D]' : 'bg-white text-gray-700 border-gray-300 hover:border-[#C1272D]')}>{o}</button>))}
     </div>
-  );
+  </div>);
 }
 
-/* ============================================================
-   9. DASHBOARD
-   ============================================================ */
-const ESTADO_UI = {
-  nuevo: { label: 'Nuevo', icon: IconCircle, className: 'text-ticargo-black/40' },
-  'en-progreso': { label: 'En progreso', icon: IconCircleDot, className: 'text-amber-600' },
-  completado: { label: 'Completado', icon: IconCircleCheck, className: 'text-green-600' },
-};
+function Check({ label, checked, onChange }) {
+  return (<label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+    <input type="checkbox" className="mt-1 h-4 w-4 accent-[#C1272D]" checked={!!checked} onChange={e => onChange(e.target.checked)} />
+    <span className="text-sm">{label}</span></label>);
+}
 
-function FormCard({ f, onAbrir }) {
-  const [estado, setEstado] = useState('nuevo');
-  useEffect(() => { setEstado(estadoFormulario(f.codigo)); }, [f.codigo]);
-  const info = ESTADO_UI[estado];
-  const EstadoIcon = info.icon;
-  return (
-    <button onClick={() => onAbrir(f.slug)} className="group flex flex-col justify-between rounded-xl border border-ticargo-border bg-white p-5 text-left shadow-sm transition-shadow hover:shadow-md">
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-ticargo-red/10 text-ticargo-red"><IconFile size={20} /></span>
-          <span className={`flex items-center gap-1 text-xs font-medium ${info.className}`}><EstadoIcon size={12} /> {info.label}</span>
-        </div>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-ticargo-black/40">{f.codigo}</p>
-        <h3 className="mt-1 text-base font-semibold text-ticargo-black">{f.titulo}</h3>
-        <p className="mt-1.5 text-sm text-ticargo-black/60">{f.descripcion}</p>
-      </div>
-      <div className="mt-4 flex items-center gap-1 text-sm font-medium text-ticargo-red">
-        Diligenciar <IconChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-      </div>
+function Section({ letter, title, children, open, onToggle, hint }) {
+  return (<div className="card overflow-hidden mb-3">
+    <button type="button" onClick={onToggle} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50">
+      <span className="flex-none h-8 w-8 rounded-lg bg-[#C1272D] text-white font-bold grid place-items-center">{letter}</span>
+      <span className="flex-1"><span className="block font-semibold text-sm md:text-base">{title}</span>{hint && <span className="block text-xs text-gray-500">{hint}</span>}</span>
+      <svg className={'h-5 w-5 text-gray-500 transition-transform ' + (open ? 'rotate-180' : '')} viewBox="0 0 20 20" fill="currentColor"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z" /></svg>
     </button>
-  );
+    {open && <div className="px-4 pb-4 pt-1 border-t border-gray-100 fade-in">{children}</div>}
+  </div>);
 }
 
-function Dashboard({ onAbrir }) {
-  return (
-    <div>
-      <div className="mb-6 flex items-start gap-3 rounded-xl bg-ticargo-black p-5 text-white sm:p-6">
-        <IconShield size={28} className="mt-0.5 shrink-0 text-ticargo-red" />
-        <div>
-          <h1 className="text-lg font-semibold sm:text-xl">Portal de Vinculación SAGRILAFT — {EMPRESA.razonSocial}</h1>
-          <p className="mt-1 text-sm text-white/70">Diligencie digitalmente los formularios de vinculación, genere el PDF oficial y guárdelo o envíelo a su contacto en TI Cargo. Oficial de Cumplimiento: {EMPRESA.oficialCumplimiento}.</p>
-        </div>
+const Grid = ({ children, cols }) => <div className={'grid grid-cols-1 gap-3 ' + (cols === 2 ? 'md:grid-cols-2' : cols === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3')}>{children}</div>;
+const SubTitle = ({ children }) => <h4 className="text-sm font-bold text-[#9E1F24] mt-5 mb-2 border-b border-red-100 pb-1">{children}</h4>;
+
+// Lista dinamica generica
+function ListEditor({ items, onChange, max, newItem, addLabel, itemLabel, render, minItems }) {
+  const upd = (i, k, v) => onChange(items.map((it, j) => j === i ? Object.assign({}, it, { [k]: v }) : it));
+  const min = minItems || 0;
+  return (<div>
+    {items.map((it, i) => (<div key={i} className="border border-gray-200 rounded-xl p-3 mb-3 bg-gray-50/60">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{itemLabel} {i + 1}</span>
+        {items.length > min && <button type="button" className="text-xs text-[#C1272D] hover:underline" onClick={() => onChange(items.filter((_, j) => j !== i))}>Eliminar</button>}
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {FORMULARIOS.map((f) => <FormCard key={f.slug} f={f} onAbrir={onAbrir} />)}
-      </div>
+      {render(it, (k, v) => upd(i, k, v), i)}
+    </div>))}
+    {(!max || items.length < max)
+      ? <button type="button" className="btn btn-ghost" onClick={() => onChange(items.concat([newItem()]))}>+ {addLabel}</button>
+      : <span className="text-xs text-gray-500">Máximo {max} registros.</span>}
+  </div>);
+}
+
+function FormUnico({ f, set }) {
+  const [open, setOpen] = useState({ A: true });
+  const tg = (k) => setOpen(o => Object.assign({}, o, { [k]: !o[k] }));
+  const b = (path) => ({ value: getIn(f, path), onChange: (v) => set(path, v) });
+  const P = (arr) => (v) => set(arr, v);
+  const allOpen = () => { const o = {}; 'ABCDEFGHIJKLM'.split('').forEach(k => o[k] = true); setOpen(o); };
+  const allClose = () => setOpen({});
+  const answered = Object.values(f.visita.q).filter(x => x.r).length;
+
+  return (<div>
+    <div className="flex gap-2 mb-3 justify-end">
+      <button type="button" className="btn btn-ghost" onClick={allOpen}>Expandir todo</button>
+      <button type="button" className="btn btn-ghost" onClick={allClose}>Contraer todo</button>
     </div>
-  );
+
+    <Section letter="A" title="Datos generales" open={!!open.A} onToggle={() => tg('A')}>
+      <Grid>
+        <Field label="Razón social *" span={2} {...b('gen.razon')} />
+        <Field label="NIT *" {...b('gen.nit')} placeholder="000.000.000-0" />
+        <Field label="Nombre comercial" {...b('gen.comercial')} />
+        <Field label="Tipo de sociedad" options={TIPOS_SOC} {...b('gen.tipoSoc')} />
+        <Field label="Fecha de constitución" type="date" {...b('gen.fechaConst')} />
+        <Field label="Lugar de constitución" {...b('gen.lugarConst')} />
+        <Field label="Código CIIU" {...b('gen.ciiu')} />
+        <Field label="Objeto social" span={3} rows={2} {...b('gen.objeto')} />
+        <Field label="Descripción de la actividad económica" span={3} rows={2} {...b('gen.actividad')} />
+      </Grid>
+    </Section>
+
+    <Section letter="B" title="Información de contacto" open={!!open.B} onToggle={() => tg('B')}>
+      <Grid>
+        <Field label="Dirección principal" span={3} {...b('contacto.dir')} />
+        <Field label="Ciudad" {...b('contacto.ciudad')} />
+        <Field label="Departamento" {...b('contacto.depto')} />
+        <Field label="País" {...b('contacto.pais')} />
+        <Field label="Teléfono" {...b('contacto.tel')} />
+        <Field label="Celular" {...b('contacto.cel')} />
+        <Field label="Email corporativo" type="email" {...b('contacto.email')} />
+        <Field label="Sitio web" span={3} {...b('contacto.web')} />
+      </Grid>
+    </Section>
+
+    <Section letter="C" title="Representante(s) legal(es)" hint="Máximo 3" open={!!open.C} onToggle={() => tg('C')}>
+      <ListEditor items={f.reps} onChange={P('reps')} max={3} minItems={1} newItem={newRep} addLabel="Agregar representante" itemLabel="Representante"
+        render={(r, u) => (<Grid>
+          <Field label="Nombres y apellidos" span={2} value={r.nombre} onChange={v => u('nombre', v)} />
+          <Field label="Tipo de documento" options={TIPOS_DOC} value={r.tipoDoc} onChange={v => u('tipoDoc', v)} />
+          <Field label="Número de documento" value={r.numDoc} onChange={v => u('numDoc', v)} />
+          <Field label="Fecha de expedición" type="date" value={r.fechaExp} onChange={v => u('fechaExp', v)} />
+          <Field label="Lugar de expedición" value={r.lugarExp} onChange={v => u('lugarExp', v)} />
+          <YN label="¿Es PEP?" value={r.pep} onChange={v => u('pep', v)} span={3} />
+          {r.pep === 'Sí' && (<>
+            <Field label="Cargo PEP" value={r.pepCargo} onChange={v => u('pepCargo', v)} />
+            <Field label="Entidad PEP" value={r.pepEntidad} onChange={v => u('pepEntidad', v)} />
+            <span />
+            <Field label="Fecha de vinculación PEP" type="date" value={r.pepVinc} onChange={v => u('pepVinc', v)} />
+            <Field label="Fecha de desvinculación PEP" type="date" value={r.pepDesvinc} onChange={v => u('pepDesvinc', v)} />
+          </>)}
+        </Grid>)} />
+    </Section>
+
+    <Section letter="D" title="Composición accionaria / Beneficiarios finales" hint="Máximo 10 · Personas con participación igual o superior al 5%" open={!!open.D} onToggle={() => tg('D')}>
+      <ListEditor items={f.accionistas} onChange={P('accionistas')} max={10} newItem={newAcc} addLabel="Agregar accionista / beneficiario" itemLabel="Accionista"
+        render={(a, u) => (<Grid>
+          <Field label="Nombre o razón social" span={2} value={a.nombre} onChange={v => u('nombre', v)} />
+          <Field label="Tipo de documento" options={TIPOS_DOC_ACC} value={a.tipoDoc} onChange={v => u('tipoDoc', v)} />
+          <Field label="Número de documento" value={a.numDoc} onChange={v => u('numDoc', v)} />
+          <Field label="% de participación" type="number" value={a.porc} onChange={v => u('porc', v)} />
+          <Field label="País de residencia" value={a.pais} onChange={v => u('pais', v)} />
+          <YN label="¿Es PEP?" value={a.pep} onChange={v => u('pep', v)} span={3} />
+        </Grid>)} />
+      <p className="text-xs text-gray-500 mt-2">Total participación declarada: <b>{f.accionistas.reduce((s, a) => s + num(a.porc), 0)}%</b></p>
+    </Section>
+
+    <Section letter="E" title="Información financiera y tributaria" open={!!open.E} onToggle={() => tg('E')}>
+      <Grid>
+        <Field label="Capital social registrado" type="number" {...b('fin.capital')} />
+        <Field label="Código CIIU" {...b('fin.ciiu')} placeholder={f.gen.ciiu} />
+        <Field label="Fecha de constitución" type="date" {...b('fin.fechaConst')} />
+        <Field label="Origen de fondos" span={3} rows={2} {...b('fin.origen')} />
+        <Field label="Régimen IVA" options={['Responsable de IVA', 'No responsable de IVA', 'Régimen simple', 'Otro']} {...b('fin.ivaReg')} />
+        <YN label="Gran contribuyente" {...b('fin.granContrib')} />
+        <YN label="Autorretenedor" {...b('fin.autorret')} />
+        <YN label="Agente de retención" {...b('fin.agenteRet')} />
+        <span /><span />
+        <Field label="Total activos (COP)" type="number" {...b('fin.activos')} />
+        <Field label="Total pasivos (COP)" type="number" {...b('fin.pasivos')} />
+        <Field label="Total patrimonio (auto)" readOnly value={patrimonio(f)} onChange={() => { }} hint="Activos - Pasivos" />
+        <Field label="Ingresos operacionales" type="number" {...b('fin.ingresos')} />
+        <Field label="Total egresos" type="number" {...b('fin.egresos')} />
+        <Field label="Otros ingresos" type="number" {...b('fin.otrosIngresos')} />
+      </Grid>
+    </Section>
+
+    <Section letter="F" title="Operaciones de comercio exterior" open={!!open.F} onToggle={() => tg('F')}>
+      <SubTitle>Productos que importa (máx. 5)</SubTitle>
+      <ListEditor items={f.comex.imports} onChange={v => set('comex.imports', v)} max={5} newItem={() => ({ p: '' })} addLabel="Agregar producto" itemLabel="Producto importado"
+        render={(it, u) => <Field label="Producto" value={it.p} onChange={v => u('p', v)} />} />
+      <SubTitle>Productos que exporta (máx. 5)</SubTitle>
+      <ListEditor items={f.comex.exports} onChange={v => set('comex.exports', v)} max={5} newItem={() => ({ p: '' })} addLabel="Agregar producto" itemLabel="Producto exportado"
+        render={(it, u) => <Field label="Producto" value={it.p} onChange={v => u('p', v)} />} />
+      <SubTitle>Medios de pago</SubTitle>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {MEDIOS_PAGO.map(m => <Check key={m} label={m} checked={f.comex.pagos[m]} onChange={v => set('comex.pagos', Object.assign({}, f.comex.pagos, { [m]: v }))} />)}
+      </div>
+      {f.comex.pagos['Otro'] && <div className="mt-2"><Field label="¿Cuál otro medio de pago?" {...b('comex.otroPago')} /></div>}
+      <SubTitle>Personas que realizan operaciones de comercio exterior</SubTitle>
+      <ListEditor items={f.comex.personas} onChange={v => set('comex.personas', v)} newItem={() => ({ nombre: '', doc: '', tel: '', dir: '', email: '' })} addLabel="Agregar persona" itemLabel="Persona"
+        render={(p, u) => (<Grid>
+          <Field label="Nombre" value={p.nombre} onChange={v => u('nombre', v)} />
+          <Field label="Documento" value={p.doc} onChange={v => u('doc', v)} />
+          <Field label="Teléfono" value={p.tel} onChange={v => u('tel', v)} />
+          <Field label="Dirección" span={2} value={p.dir} onChange={v => u('dir', v)} />
+          <Field label="Email" type="email" value={p.email} onChange={v => u('email', v)} />
+        </Grid>)} />
+      <SubTitle>Banco para operaciones de comercio exterior</SubTitle>
+      <Grid cols={4}>
+        <Field label="Nombre del banco" {...b('comex.banco.nombre')} />
+        <Field label="Número de cuenta" {...b('comex.banco.cuenta')} />
+        <Field label="Teléfono" {...b('comex.banco.tel')} />
+        <Field label="País" {...b('comex.banco.pais')} />
+      </Grid>
+    </Section>
+
+    <Section letter="G" title="Personas de contacto" hint="Máximo 5" open={!!open.G} onToggle={() => tg('G')}>
+      <ListEditor items={f.contactos} onChange={P('contactos')} max={5} newItem={() => ({ rol: '', nombre: '', tel: '', email: '' })} addLabel="Agregar contacto" itemLabel="Contacto"
+        render={(p, u) => (<Grid cols={4}>
+          <Field label="Responsable / ROL" value={p.rol} onChange={v => u('rol', v)} />
+          <Field label="Nombre y apellido" value={p.nombre} onChange={v => u('nombre', v)} />
+          <Field label="Teléfono" value={p.tel} onChange={v => u('tel', v)} />
+          <Field label="Email" type="email" value={p.email} onChange={v => u('email', v)} />
+        </Grid>)} />
+    </Section>
+
+    <Section letter="H" title="Clientes y proveedores" open={!!open.H} onToggle={() => tg('H')}>
+      <SubTitle>Clientes principales</SubTitle>
+      <ListEditor items={f.clientes} onChange={P('clientes')} newItem={() => ({ nombre: '', id: '', dir: '' })} addLabel="Agregar cliente" itemLabel="Cliente"
+        render={(p, u) => (<Grid><Field label="Nombre" value={p.nombre} onChange={v => u('nombre', v)} /><Field label="Identificación" value={p.id} onChange={v => u('id', v)} /><Field label="Dirección" value={p.dir} onChange={v => u('dir', v)} /></Grid>)} />
+      <SubTitle>Proveedores principales</SubTitle>
+      <ListEditor items={f.proveedores} onChange={P('proveedores')} newItem={() => ({ nombre: '', id: '', dir: '' })} addLabel="Agregar proveedor" itemLabel="Proveedor"
+        render={(p, u) => (<Grid><Field label="Nombre" value={p.nombre} onChange={v => u('nombre', v)} /><Field label="Identificación" value={p.id} onChange={v => u('id', v)} /><Field label="Dirección" value={p.dir} onChange={v => u('dir', v)} /></Grid>)} />
+    </Section>
+
+    <Section letter="I" title="Referencias" open={!!open.I} onToggle={() => tg('I')}>
+      <SubTitle>Referencias comerciales (máx. 3)</SubTitle>
+      <ListEditor items={f.refCom} onChange={P('refCom')} max={3} newItem={() => ({ nombre: '', id: '', tel: '' })} addLabel="Agregar referencia comercial" itemLabel="Referencia"
+        render={(p, u) => (<Grid><Field label="Nombre" value={p.nombre} onChange={v => u('nombre', v)} /><Field label="Identificación" value={p.id} onChange={v => u('id', v)} /><Field label="Teléfono" value={p.tel} onChange={v => u('tel', v)} /></Grid>)} />
+      <SubTitle>Referencias bancarias (máx. 3)</SubTitle>
+      <ListEditor items={f.refBanc} onChange={P('refBanc')} max={3} newItem={() => ({ entidad: '', tipo: '', cuenta: '', tel: '' })} addLabel="Agregar referencia bancaria" itemLabel="Referencia"
+        render={(p, u) => (<Grid cols={4}><Field label="Entidad bancaria" value={p.entidad} onChange={v => u('entidad', v)} /><Field label="Tipo de cuenta" options={['Ahorros', 'Corriente']} value={p.tipo} onChange={v => u('tipo', v)} /><Field label="Número de cuenta" value={p.cuenta} onChange={v => u('cuenta', v)} /><Field label="Teléfono" value={p.tel} onChange={v => u('tel', v)} /></Grid>)} />
+    </Section>
+
+    <Section letter="J" title="Sistemas de calidad y seguridad" open={!!open.J} onToggle={() => tg('J')}>
+      <Grid cols={2}>
+        <YN label="¿Tiene sistema de gestión certificado?" {...b('calidad.sgc')} />
+        {f.calidad.sgc === 'Sí' && <Field label="¿Cuál?" {...b('calidad.sgcCual')} />}
+        <YN label="¿Tiene certificación BASC / OEA?" {...b('calidad.basc')} />
+        {f.calidad.basc === 'Sí' && <Field label="¿Cuál?" {...b('calidad.bascCual')} />}
+        <Field label="Controles de seguridad" span={2} rows={2} {...b('calidad.controles')} />
+      </Grid>
+    </Section>
+
+    <Section letter="K" title="Visita de seguridad" hint={'26 preguntas · ' + answered + ' respondidas'} open={!!open.K} onToggle={() => tg('K')}>
+      <Grid cols={3}>
+        <Field label="Persona que atiende la visita" {...b('visita.atiende')} />
+        <Field label="Cargo" {...b('visita.cargoAtiende')} />
+        <Field label="Fecha de visita" type="date" {...b('visita.fecha')} />
+      </Grid>
+      <div className="mt-4 space-y-3">
+        {VISITA_Q.map((q, i) => {
+          const a = f.visita.q[i + 1] || { r: '', obs: '' };
+          return (<div key={i} className="border border-gray-200 rounded-xl p-3">
+            <p className="text-sm font-medium mb-2"><span className="text-[#C1272D] font-bold mr-1">{i + 1}.</span>{q}</p>
+            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
+              <div className="flex gap-2">
+                {['Sí', 'No', 'N.A.'].map(o => (<button type="button" key={o} onClick={() => set('visita.q.' + (i + 1) + '.r', a.r === o ? '' : o)}
+                  className={'px-3 py-1 rounded-full text-sm border ' + (a.r === o ? 'bg-[#1D1D1B] text-white border-[#1D1D1B]' : 'bg-white border-gray-300 hover:border-[#1D1D1B]')}>{o}</button>))}
+              </div>
+              <input className={inputCls} placeholder="Observación" value={a.obs} onChange={e => set('visita.q.' + (i + 1) + '.obs', e.target.value)} />
+            </div>
+          </div>);
+        })}
+      </div>
+    </Section>
+
+    <Section letter="L" title="Declaraciones juramentadas" open={!!open.L} onToggle={() => tg('L')}>
+      <div className="space-y-2">
+        <Check label="Declaración juramentada de origen lícito de fondos: declaro que los recursos de la empresa provienen de actividades lícitas." checked={f.decl.fondos} onChange={v => set('decl.fondos', v)} />
+        <Check label="Autorización de consulta en listas restrictivas y vinculantes (OFAC, ONU, Unión Europea)." checked={f.decl.listas} onChange={v => set('decl.listas', v)} />
+        <Check label="Autorización para el tratamiento de datos personales (Ley 1581 de 2012)." checked={f.decl.datos} onChange={v => set('decl.datos', v)} />
+        <Check label="Compromisos de seguridad BASC." checked={f.decl.basc} onChange={v => set('decl.basc', v)} />
+      </div>
+    </Section>
+
+    <Section letter="M" title="Firma" open={!!open.M} onToggle={() => tg('M')}>
+      <Grid>
+        <Field label="Nombre completo del firmante" span={2} {...b('firma.nombre')} />
+        <Field label="Número de documento" {...b('firma.doc')} />
+        <Field label="Cargo" {...b('firma.cargo')} />
+        <Field label="Ciudad" {...b('firma.ciudad')} />
+        <Field label="Fecha" type="date" {...b('firma.fecha')} />
+      </Grid>
+    </Section>
+  </div>);
+}
+</script>
+
+<!-- ============ BLOQUE 4: PORTAL CLIENTE ============ -->
+<script type="text/babel" data-presets="react">
+const MAX_FILE = 1.5 * 1024 * 1024;
+
+function Header({ title, onBack, right }) {
+  return (<header className="bg-[#1D1D1B] text-white sticky top-0 z-30 shadow">
+    <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <span className="bg-[#C1272D] text-white font-extrabold px-2 py-0.5 rounded text-sm tracking-wide">TI CARGO</span>
+        <span className="hidden sm:inline text-sm text-gray-300">{title}</span>
+      </div>
+      <div className="flex-1" />
+      {right}
+      {onBack && <button className="text-xs md:text-sm px-3 py-1.5 rounded-lg border border-gray-600 hover:bg-gray-800" onClick={onBack}>Salir</button>}
+    </div>
+  </header>);
 }
 
-/* ============================================================
-   10. APP RAÍZ (ruteo por hash)
-   ============================================================ */
-function App() {
-  const [ruta, setRuta] = useState(window.location.hash || '#/');
+function Stepper({ step, onGo, maxStep }) {
+  const steps = ['Tipo de vinculación', 'Formulario único', 'Generar documentos', 'Subir documentos'];
+  return (<div className="card p-3 md:p-4 mb-4">
+    <div className="flex items-center">
+      {steps.map((s, i) => {
+        const n = i + 1, done = n < step, cur = n === step;
+        return (<React.Fragment key={s}>
+          <button disabled={n > maxStep} onClick={() => onGo(n)} className="flex flex-col md:flex-row items-center gap-1 md:gap-2 disabled:cursor-not-allowed">
+            <span className={'h-8 w-8 rounded-full grid place-items-center text-sm font-bold ' + (cur ? 'bg-[#C1272D] text-white ring-4 ring-red-100' : done ? 'bg-[#1D1D1B] text-white' : 'bg-gray-200 text-gray-500')}>{done ? '✓' : n}</span>
+            <span className={'text-[11px] md:text-sm text-center ' + (cur ? 'font-bold text-[#C1272D]' : 'text-gray-600')}>{s}</span>
+          </button>
+          {i < steps.length - 1 && <div className={'flex-1 h-0.5 mx-2 ' + (done ? 'bg-[#1D1D1B]' : 'bg-gray-200')} />}
+        </React.Fragment>);
+      })}
+    </div>
+  </div>);
+}
+
+function ClientPortal({ onExit }) {
+  const [step, setStep] = useState(1);
+  const [maxStep, setMaxStep] = useState(1);
+  const [tipo, setTipo] = useState('Nueva');
+  const [nitQ, setNitQ] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [form, setForm] = useState(emptyForm());
+  const [files, setFiles] = useState({});
+  const [started, setStarted] = useState(false);
+  const [draft, setDraft] = useState(() => LS.get(KEY_DRAFT, null));
+  const [loaded, setLoaded] = useState(false);
+  const [saved, setSaved] = useState('');
+  const [done, setDone] = useState(false);
+  const [uploadMode, setUploadMode] = useState('separado');
+  const [warn, setWarn] = useState('');
+  const set = useCallback((path, val) => setForm(f => setIn(f, path, val)), []);
+  const nit = normNit(form.gen.nit);
+
+  // Autoguardado de borrador
   useEffect(() => {
-    const onHash = () => setRuta(window.location.hash || '#/');
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+    if (!started) return;
+    const t = setTimeout(() => { LS.set(KEY_DRAFT, { form, tipo, step, ts: Date.now() }); setSaved(new Date().toLocaleTimeString('es-CO')); }, 400);
+    return () => clearTimeout(t);
+  }, [form, tipo, step, started]);
 
-  const slug = ruta.startsWith('#/') ? ruta.slice(2) : '';
-  const irA = (s) => { window.location.hash = `#/${s}`; };
+  const go = (n) => { setStep(n); setMaxStep(m => Math.max(m, n)); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
-  return (
-    <div className="min-h-screen bg-ticargo-gray">
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-ticargo-red px-4 shadow-md sm:px-6">
-        <button onClick={() => irA('')} className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 rounded bg-white px-2.5 py-1.5">
-            <IconShield size={18} className="text-ticargo-red" />
-            <span className="text-sm font-bold text-ticargo-red">TI CARGO</span>
-          </div>
-        </button>
-        <div className="hidden text-right text-white sm:block">
-          <p className="text-sm font-semibold leading-tight">{EMPRESA.razonSocial}</p>
-          <p className="text-xs leading-tight text-white/85">Portal de Vinculación SAGRILAFT</p>
+  const resume = () => { setForm(mergeForm(draft.form)); setTipo(draft.tipo || 'Nueva'); setStarted(true); setLoaded(true); setDraft(null); const s = Math.min(draft.step || 2, 2); setMaxStep(2); setStep(Math.max(s, 2)); };
+  const discard = () => { LS.del(KEY_DRAFT); setDraft(null); };
+
+  const lookup = () => {
+    const all = getClients();
+    const k = Object.keys(all).find(x => sameNit(x, nitQ));
+    if (!k) { setMsg({ t: 'err', m: 'No se encontró ningún cliente con ese NIT. Verifique el número o seleccione "Vinculación nueva".' }); setLoaded(false); return; }
+    setForm(mergeForm(all[k].data)); setFiles(all[k].files || {}); setLoaded(true);
+    setMsg({ t: 'ok', m: 'Datos cargados: ' + all[k].razon + '. Revise y actualice la información en el siguiente paso.' });
+  };
+
+  const start = () => {
+    if (tipo === 'Actualización' && !loaded) { setMsg({ t: 'err', m: 'Busque y cargue primero el NIT del cliente a actualizar.' }); return; }
+    if (tipo === 'Nueva' && !started) setForm(emptyForm());
+    setStarted(true); go(2);
+  };
+
+  const saveForm = () => {
+    if (!form.gen.razon.trim() || !nit) { alert('Complete al menos Razón social y NIT (Sección A) para continuar.'); return; }
+    const all = getClients();
+    const exist = Object.keys(all).find(x => sameNit(x, form.gen.nit));
+    const key = exist || nit;
+    const patch = { razon: form.gen.razon, data: form };
+    if (exist) { patch.tipo = tipo === 'Actualización' ? 'Actualización' : all[exist].tipo; patch.fechaActualizacion = todayISO(); patch._log = { accion: tipo === 'Actualización' ? 'Actualización de información por el cliente' : 'Formulario re-diligenciado por el cliente', nota: '' }; if (all[exist].estado === 'Aprobado') patch.estado = 'En revisión'; }
+    else { patch.tipo = 'Nueva'; patch.fechaVinc = todayISO(); patch._log = { accion: 'Vinculación nueva registrada por el cliente', nota: '' }; }
+    if (!upsertClient(key, patch)) { alert('No se pudo guardar: el almacenamiento local está lleno. Elimine datos o documentos grandes.'); return; }
+    if (!exist) setFiles({});
+    else setFiles(all[exist].files || {});
+    go(3);
+  };
+  const recKey = () => { const all = getClients(); return Object.keys(all).find(x => sameNit(x, form.gen.nit)) || nit; };
+
+  const persistFiles = (nf) => {
+    if (!upsertClient(recKey(), { files: nf })) { alert('Almacenamiento local lleno. No se pudo guardar el archivo; use un archivo más pequeño.'); return false; }
+    setFiles(nf);
+    const mb = LS.size() / 1048576;
+    setWarn(mb > 3.5 ? 'Atención: el almacenamiento local está al ' + Math.min(100, Math.round(mb / 5 * 100)) + '% (aprox. ' + mb.toFixed(1) + ' MB de 5 MB).' : '');
+    return true;
+  };
+  const readFile = (file) => new Promise((res) => {
+    if (file.size > MAX_FILE && !confirm('"' + file.name + '" pesa ' + (file.size / 1048576).toFixed(1) + ' MB. El almacenamiento local es limitado (~5 MB en total). ¿Desea intentarlo de todas formas?')) return res(null);
+    const r = new FileReader();
+    r.onload = () => res({ name: file.name, type: file.type, size: file.size, data: r.result, date: todayISO() });
+    r.onerror = () => res(null);
+    r.readAsDataURL(file);
+  });
+  const uploadOne = async (key, file) => { if (!file) return; const o = await readFile(file); if (o) persistFiles(Object.assign({}, files, { [key]: o })); };
+  const uploadMany = async (list) => {
+    let nf = Object.assign({}, files);
+    const pend = DOCS_REQ.map(d => d.key).filter(k => !nf[k]);
+    let extra = Object.keys(nf).filter(k => k.startsWith('otro_')).length;
+    for (const file of Array.from(list)) {
+      const o = await readFile(file); if (!o) continue;
+      if (pend.length) nf[pend.shift()] = o; else nf['otro_' + (++extra)] = o;
+    }
+    persistFiles(nf);
+  };
+  const removeFile = (k) => { const nf = Object.assign({}, files); delete nf[k]; persistFiles(nf); };
+  const finish = () => {
+    upsertClient(recKey(), { estado: 'En revisión', _log: { accion: 'Cliente finalizó el trámite y envió documentos a revisión', nota: Object.keys(files).length + ' archivo(s) cargado(s)' } });
+    LS.del(KEY_DRAFT); setDone(true);
+  };
+
+  if (done) return (<div className="min-h-screen"><Header title="Portal Cliente" onBack={onExit} />
+    <div className="max-w-xl mx-auto p-6 mt-10 card text-center fade-in">
+      <div className="mx-auto h-16 w-16 rounded-full bg-green-100 text-green-600 grid place-items-center text-3xl mb-4">✓</div>
+      <h2 className="text-xl font-bold mb-2">¡Trámite enviado!</h2>
+      <p className="text-gray-600 text-sm mb-6">Su información y documentos fueron registrados para <b>{form.gen.razon}</b>. El Oficial de Cumplimiento de TI Cargo revisará su solicitud y se pondrá en contacto con usted.</p>
+      <p className="text-xs text-gray-500 mb-6">Consultas: {CO.email} · {CO.tel}</p>
+      <button className="btn btn-primary" onClick={onExit}>Volver al inicio</button></div></div>);
+
+  const missing = DOCS_REQ.filter(d => !files[d.key]).length;
+
+  return (<div className="min-h-screen pb-24">
+    <Header title="Portal Cliente · Vinculación SAGRILAFT" onBack={onExit} right={started && saved ? <span className="text-[11px] text-gray-400 hidden md:inline">Borrador guardado {saved}</span> : null} />
+    <main className="max-w-5xl mx-auto px-3 md:px-4 py-5">
+      <Stepper step={step} onGo={go} maxStep={maxStep} />
+
+      {step === 1 && (<div className="card p-5 md:p-7 fade-in">
+        <h2 className="text-lg md:text-xl font-bold mb-1">Tipo de vinculación</h2>
+        <p className="text-sm text-gray-500 mb-5">Diligencie su información una sola vez; con ella generamos todos los formatos requeridos.</p>
+        {draft && (<div className="mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex-1 text-sm"><b>Tiene un borrador guardado</b>{draft.form && draft.form.gen.razon ? ' de ' + draft.form.gen.razon : ''} ({new Date(draft.ts).toLocaleString('es-CO')}).</div>
+          <button className="btn btn-primary" onClick={resume}>Continuar borrador</button><button className="btn btn-ghost" onClick={discard}>Descartar</button></div>)}
+        <div className="grid md:grid-cols-2 gap-3">
+          {[['Nueva', 'Vinculación Nueva', 'Primera vez que se vincula con TI Cargo.'], ['Actualización', 'Actualización', 'Ya es cliente y debe actualizar su información (mínimo anual).']].map(o => (
+            <label key={o[0]} className={'cursor-pointer p-4 rounded-xl border-2 transition ' + (tipo === o[0] ? 'border-[#C1272D] bg-red-50' : 'border-gray-200 hover:border-gray-400')}>
+              <input type="radio" className="accent-[#C1272D] mr-2" checked={tipo === o[0]} onChange={() => { setTipo(o[0]); setMsg(null); setLoaded(false); }} />
+              <b>{o[1]}</b><p className="text-xs text-gray-500 mt-1 ml-5">{o[2]}</p></label>))}
         </div>
-      </header>
+        {tipo === 'Actualización' && (<div className="mt-5 p-4 bg-gray-50 rounded-xl border fade-in">
+          <label className="text-xs font-semibold text-gray-600">NIT del cliente</label>
+          <div className="flex gap-2 mt-1"><input className={inputCls} placeholder="Ej: 805.005.709-6" value={nitQ} onChange={e => setNitQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && lookup()} />
+            <button className="btn btn-dark" onClick={lookup}>Buscar</button></div>
+        </div>)}
+        {msg && <div className={'mt-4 p-3 rounded-lg text-sm ' + (msg.t === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200')}>{msg.m}</div>}
+        <div className="mt-6 flex justify-end"><button className="btn btn-primary" onClick={start}>Continuar →</button></div>
+      </div>)}
 
-      <div className="mx-auto flex max-w-7xl">
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto bg-ticargo-black md:block">
-          <nav className="flex flex-col gap-1 p-3">
-            <button onClick={() => irA('')} className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${!slug ? 'bg-ticargo-red text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
-              <IconLayout size={16} /> Dashboard
-            </button>
-            <p className="mt-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-white/40">Formularios SAGRILAFT</p>
-            {FORMULARIOS.map((f) => (
-              <button key={f.slug} onClick={() => irA(f.slug)} className={`flex items-start gap-2 rounded-md px-3 py-2 text-left text-sm ${slug===f.slug ? 'bg-ticargo-red text-white' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
-                <IconFile size={16} className="mt-0.5 shrink-0" />
-                <span><span className="block leading-tight">{f.titulo}</span><span className="block text-[10px] text-white/50">{f.codigo}</span></span>
-              </button>
-            ))}
-          </nav>
-        </aside>
+      {step === 2 && (<div className="fade-in">
+        <div className="mb-3"><h2 className="text-lg md:text-xl font-bold">Formulario único</h2><p className="text-sm text-gray-500">Se guarda automáticamente mientras escribe. Los campos con * son obligatorios.</p></div>
+        <FormUnico f={form} set={set} />
+        <div className="flex justify-between mt-5">
+          <button className="btn btn-ghost" onClick={() => go(1)}>← Atrás</button>
+          <button className="btn btn-primary" onClick={saveForm}>Guardar y generar documentos →</button></div>
+      </div>)}
 
-        <main className="min-h-[calc(100vh-4rem)] flex-1 px-4 py-6 sm:px-6">
-          {slug && FORM_CONFIGS[slug] ? <FormPage slug={slug} onVolver={() => irA('')} /> : <Dashboard onAbrir={irA} />}
-        </main>
+      {step === 3 && (<div className="fade-in">
+        <div className="mb-4 flex flex-col md:flex-row md:items-end gap-2">
+          <div className="flex-1"><h2 className="text-lg md:text-xl font-bold">Generar documentos</h2><p className="text-sm text-gray-500">Los formatos se completan con la información que diligenció. Descárguelos, fírmelos y cárguelos en el siguiente paso.</p></div>
+          <button className="btn btn-dark" onClick={() => GEN_DOCS.forEach((d, i) => setTimeout(() => downloadPDF(d.key, form, tipo), i * 700))}>⬇ Descargar todos</button>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          {GEN_DOCS.map(d => (<div key={d.key} className="card p-5 flex flex-col">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="h-12 w-10 rounded bg-red-50 border border-red-200 text-[#C1272D] grid place-items-center text-[10px] font-bold">PDF</div>
+              <div><div className="text-xs font-bold text-[#C1272D]">{d.codigo} · v{d.version}</div><div className="font-semibold text-sm">{d.titulo}</div></div>
+            </div>
+            <button className="btn btn-primary mt-4" onClick={() => downloadPDF(d.key, form, tipo)}>Descargar PDF</button>
+          </div>))}
+        </div>
+        <div className="flex justify-between mt-5"><button className="btn btn-ghost" onClick={() => go(2)}>← Editar formulario</button><button className="btn btn-primary" onClick={() => go(4)}>Continuar a documentos →</button></div>
+      </div>)}
+
+      {step === 4 && (<div className="fade-in">
+        <div className="mb-4"><h2 className="text-lg md:text-xl font-bold">Subir documentos</h2>
+          <p className="text-sm text-gray-500">Adjunte los soportes requeridos (PDF o imagen). {DOCS_REQ.length - missing} de {DOCS_REQ.length} cargados.</p>
+          <div className="h-2 bg-gray-200 rounded-full mt-2 overflow-hidden"><div className="h-full bg-[#C1272D] transition-all" style={{ width: ((DOCS_REQ.length - missing) / DOCS_REQ.length * 100) + '%' }} /></div></div>
+        {warn && <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">{warn}</div>}
+        <div className="card p-4 mb-4">
+          <div className="flex gap-2 mb-3">
+            {[['todos', 'Subir todos los documentos'], ['separado', 'Subir por separado']].map(o => (
+              <button key={o[0]} onClick={() => setUploadMode(o[0])} className={'flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ' + (uploadMode === o[0] ? 'bg-[#1D1D1B] text-white border-[#1D1D1B]' : 'bg-white border-gray-300')}>{o[1]}</button>))}
+          </div>
+          {uploadMode === 'todos' && (<div className="fade-in"><input type="file" multiple accept=".pdf,image/*" onChange={e => { uploadMany(e.target.files); e.target.value = ''; }} className="block w-full text-sm border-2 border-dashed border-gray-300 rounded-xl p-4" />
+            <p className="text-xs text-gray-500 mt-2">Los archivos se asignan en orden a los documentos pendientes de la lista. Puede reasignarlos o reemplazarlos subiéndolos por separado.</p></div>)}
+        </div>
+        <div className="space-y-2">
+          {DOCS_REQ.map((d, i) => { const fl = files[d.key]; return (
+            <div key={d.key} className={'card p-3 md:p-4 flex flex-col md:flex-row md:items-center gap-3 ' + (fl ? 'border-green-300' : '')}>
+              <span className={'flex-none text-[11px] font-bold px-2 py-1 rounded-full w-fit ' + (fl ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>{fl ? 'Cargado' : 'Pendiente'}</span>
+              <div className="flex-1 min-w-0"><div className="text-sm font-medium">{i + 1}. {d.label}</div>{fl && <div className="text-xs text-gray-500 truncate">{fl.name} · {(fl.size / 1024).toFixed(0)} KB</div>}</div>
+              <div className="flex items-center gap-2">
+                <label className="btn btn-ghost cursor-pointer text-xs">{fl ? 'Reemplazar' : 'Seleccionar archivo'}<input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { uploadOne(d.key, e.target.files[0]); e.target.value = ''; }} /></label>
+                {fl && <button className="text-xs text-[#C1272D] hover:underline" onClick={() => removeFile(d.key)}>Quitar</button>}
+              </div>
+            </div>); })}
+          {Object.keys(files).filter(k => k.startsWith('otro_')).map(k => (<div key={k} className="card p-3 flex items-center gap-3"><span className="text-[11px] font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700">Adicional</span><span className="flex-1 text-sm truncate">{files[k].name}</span><button className="text-xs text-[#C1272D]" onClick={() => removeFile(k)}>Quitar</button></div>))}
+        </div>
+        <div className="flex justify-between mt-5"><button className="btn btn-ghost" onClick={() => go(3)}>← Atrás</button>
+          <button className="btn btn-primary" onClick={() => { if (missing && !confirm('Faltan ' + missing + ' documento(s). ¿Enviar de todas formas?')) return; finish(); }}>Finalizar y enviar</button></div>
+      </div>)}
+    </main>
+  </div>);
+}
+</script>
+
+<!-- ============ BLOQUE 5: ADMINISTRACION ============ -->
+<script type="text/babel" data-presets="react">
+const ESTADO_CLS = { 'Pendiente documentos': 'bg-amber-100 text-amber-800', 'En revisión': 'bg-blue-100 text-blue-800', 'Aprobado': 'bg-green-100 text-green-800', 'Rechazado': 'bg-red-100 text-red-800', 'Requiere información adicional': 'bg-purple-100 text-purple-800' };
+const RIESGO_CLS = { 'Bajo': 'bg-green-100 text-green-800', 'Medio': 'bg-yellow-100 text-yellow-800', 'Alto': 'bg-red-100 text-red-800', 'No evaluado': 'bg-gray-100 text-gray-600' };
+const Badge = ({ cls, children }) => <span className={'inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ' + cls}>{children}</span>;
+
+function AdminPanel({ onExit }) {
+  const [clients, setClients] = useState(getClients());
+  const [tab, setTab] = useState('clientes');
+  const [sel, setSel] = useState(null);
+  const [q, setQ] = useState('');
+  const [fe, setFe] = useState('');
+  const reload = () => setClients(getClients());
+  const list = Object.values(clients).filter(c => {
+    const qq = q.trim().toLowerCase();
+    const okQ = !qq || normNit(c.nit).includes(normNit(qq) || '§') || (c.razon || '').toLowerCase().includes(qq) || String(c.nit).includes(qq);
+    return okQ && (!fe || c.estado === fe);
+  }).sort((a, b) => String(b.fechaVinc).localeCompare(String(a.fechaVinc)));
+  const cur = sel && clients[sel];
+  const open = (k, t) => { setSel(k); setTab(t || 'detalle'); window.scrollTo({ top: 0 }); };
+  const tabs = [['clientes', 'Clientes'], ['detalle', 'Detalle cliente'], ['oficial', 'Oficial de Cumplimiento']];
+  const today = todayISO();
+  const stats = ESTADOS.map(e => [e, Object.values(clients).filter(c => c.estado === e).length]);
+
+  return (<div className="min-h-screen pb-20">
+    <Header title="Administración · Oficial de Cumplimiento" onBack={onExit} />
+    <main className="max-w-6xl mx-auto px-3 md:px-4 py-5">
+      <div className="flex gap-1 border-b border-gray-300 mb-5 overflow-x-auto">
+        {tabs.map(t => { const dis = t[0] !== 'clientes' && !cur; return (
+          <button key={t[0]} disabled={dis} onClick={() => setTab(t[0])} className={'px-4 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ' + (tab === t[0] ? 'border-[#C1272D] text-[#C1272D]' : 'border-transparent text-gray-600') + (dis ? ' opacity-40 cursor-not-allowed' : '')}>{t[1]}</button>); })}
+        {cur && <span className="ml-auto self-center text-xs text-gray-500 hidden md:block pr-2">{cur.razon}</span>}
       </div>
 
-      <footer className="border-t border-ticargo-border bg-white px-4 py-4 text-center text-xs text-ticargo-black/60 sm:px-6">
-        {EMPRESA.razonSocial} · NIT {EMPRESA.nit} · {EMPRESA.direccion} · {EMPRESA.telefono}
-      </footer>
-    </div>
-  );
+      {tab === 'clientes' && (<div className="fade-in">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+          {stats.map(s => <div key={s[0]} className="card p-3"><div className="text-2xl font-extrabold">{s[1]}</div><div className="text-[11px] text-gray-500">{s[0]}</div></div>)}
+        </div>
+        <div className="flex flex-col md:flex-row gap-2 mb-3">
+          <input className={inputCls} placeholder="Buscar por NIT o razón social..." value={q} onChange={e => setQ(e.target.value)} />
+          <select className={inputCls + ' md:w-64'} value={fe} onChange={e => setFe(e.target.value)}><option value="">Todos los estados</option>{ESTADOS.map(e => <option key={e}>{e}</option>)}</select>
+        </div>
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm min-w-[820px]">
+            <thead className="bg-[#1D1D1B] text-white text-xs uppercase"><tr>
+              {['NIT', 'Razón social', 'Fecha vinculación', 'Tipo', 'Estado', 'Riesgo', 'Próx. actualización'].map(h => <th key={h} className="text-left px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
+            <tbody>
+              {list.length === 0 && <tr><td colSpan={7} className="text-center text-gray-500 py-10">No hay clientes registrados.</td></tr>}
+              {list.map(c => (<tr key={c.nit} onClick={() => open(c.nit)} className="border-t hover:bg-red-50 cursor-pointer">
+                <td className="px-3 py-2.5 font-mono text-xs">{c.data ? c.data.gen.nit : c.nit}</td>
+                <td className="px-3 py-2.5 font-medium">{c.razon}</td>
+                <td className="px-3 py-2.5">{fmtDate(c.fechaVinc)}</td>
+                <td className="px-3 py-2.5">{c.tipo}</td>
+                <td className="px-3 py-2.5"><Badge cls={ESTADO_CLS[c.estado] || ''}>{c.estado}</Badge></td>
+                <td className="px-3 py-2.5"><Badge cls={RIESGO_CLS[c.riesgo] || ''}>{c.riesgo}</Badge></td>
+                <td className="px-3 py-2.5">{c.proxAct ? <span className={c.proxAct < today ? 'text-red-600 font-semibold' : ''}>{fmtDate(c.proxAct)}{c.proxAct < today ? ' (vencida)' : ''}</span> : <span className="text-gray-400">—</span>}</td>
+              </tr>))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-500 mt-3">Almacenamiento local usado: {(LS.size() / 1048576).toFixed(2)} MB de ~5 MB.</p>
+      </div>)}
+
+      {tab === 'detalle' && cur && <ClientDetail c={cur} onOfficer={() => setTab('oficial')} />}
+      {tab === 'oficial' && cur && <OfficerEval key={cur.nit} c={cur} onSaved={reload} />}
+    </main>
+  </div>);
 }
 
+const KV = ({ label, value, wide }) => (<div className={wide ? 'md:col-span-3' : ''}><div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">{label}</div><div className="text-sm break-words">{value === '' || value == null ? <span className="text-gray-300">—</span> : value}</div></div>);
+const Block = ({ title, children }) => (<div className="card p-4 mb-3"><h3 className="font-bold text-[#9E1F24] mb-3 text-sm uppercase tracking-wide">{title}</h3>{children}</div>);
+const G3 = ({ children }) => <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3">{children}</div>;
+const Sub = ({ items, render, empty }) => items && items.length ? <div className="space-y-2 mt-2">{items.map((it, i) => <div key={i} className="bg-gray-50 border rounded-lg p-3"><G3>{render(it)}</G3></div>)}</div> : <div className="text-sm text-gray-400 mt-1">{empty || 'Sin registros'}</div>;
+
+function dlLink(fl) { return <a className="text-[#C1272D] font-semibold hover:underline text-sm" href={fl.data} download={fl.name}>Descargar</a>; }
+
+function ClientDetail({ c, onOfficer }) {
+  const f = mergeForm(c.data);
+  const [, force] = useState(0);
+  const g = f.gen, ct = f.contacto, fi = f.fin;
+  return (<div className="fade-in">
+    <div className="card p-4 mb-3 flex flex-col md:flex-row md:items-center gap-3">
+      <div className="flex-1"><div className="text-lg font-bold">{c.razon}</div><div className="text-sm text-gray-500">NIT {g.nit} · {c.tipo} · Vinculación {fmtDate(c.fechaVinc)}</div></div>
+      <div className="flex gap-2 items-center"><Badge cls={ESTADO_CLS[c.estado]}>{c.estado}</Badge><Badge cls={RIESGO_CLS[c.riesgo]}>Riesgo {c.riesgo}</Badge></div>
+      <button className="btn btn-primary" onClick={onOfficer}>Evaluar →</button>
+    </div>
+    <Block title="A. Datos generales"><G3>
+      <KV label="Razón social" value={g.razon} /><KV label="NIT" value={g.nit} /><KV label="Nombre comercial" value={g.comercial} />
+      <KV label="Tipo sociedad" value={g.tipoSoc} /><KV label="Fecha constitución" value={fmtDate(g.fechaConst)} /><KV label="Lugar constitución" value={g.lugarConst} />
+      <KV label="CIIU" value={g.ciiu} /><KV label="Objeto social" value={g.objeto} wide /><KV label="Actividad económica" value={g.actividad} wide /></G3></Block>
+    <Block title="B. Contacto"><G3>
+      <KV label="Dirección" value={ct.dir} /><KV label="Ciudad" value={ct.ciudad} /><KV label="Departamento" value={ct.depto} /><KV label="País" value={ct.pais} />
+      <KV label="Teléfono" value={ct.tel} /><KV label="Celular" value={ct.cel} /><KV label="Email" value={ct.email} /><KV label="Sitio web" value={ct.web} /></G3></Block>
+    <Block title="C. Representantes legales"><Sub items={f.reps} render={r => (<>
+      <KV label="Nombre" value={r.nombre} /><KV label="Documento" value={r.tipoDoc + ' ' + r.numDoc} /><KV label="Expedición" value={fmtDate(r.fechaExp) + ' ' + r.lugarExp} />
+      <KV label="¿PEP?" value={r.pep} />{r.pep === 'Sí' && <><KV label="Cargo / entidad" value={r.pepCargo + ' / ' + r.pepEntidad} /><KV label="Vinculación - Desvinculación" value={fmtDate(r.pepVinc) + ' - ' + fmtDate(r.pepDesvinc)} /></>}</>)} /></Block>
+    <Block title="D. Composición accionaria"><Sub items={f.accionistas} render={a => (<>
+      <KV label="Nombre" value={a.nombre} /><KV label="Documento" value={a.tipoDoc + ' ' + a.numDoc} /><KV label="% participación" value={a.porc} /><KV label="PEP" value={a.pep} /><KV label="País residencia" value={a.pais} /></>)} /></Block>
+    <Block title="E. Información financiera y tributaria"><G3>
+      <KV label="Capital social" value={money(fi.capital)} /><KV label="CIIU" value={fi.ciiu || g.ciiu} /><KV label="Fecha constitución" value={fmtDate(fi.fechaConst || g.fechaConst)} />
+      <KV label="Origen de fondos" value={fi.origen} wide /><KV label="Régimen IVA" value={fi.ivaReg} /><KV label="Gran contribuyente" value={fi.granContrib} /><KV label="Autorretenedor" value={fi.autorret} /><KV label="Agente retención" value={fi.agenteRet} />
+      <KV label="Total activos" value={money(fi.activos)} /><KV label="Total pasivos" value={money(fi.pasivos)} /><KV label="Patrimonio" value={money(patrimonio(f))} />
+      <KV label="Ingresos operacionales" value={money(fi.ingresos)} /><KV label="Total egresos" value={money(fi.egresos)} /><KV label="Otros ingresos" value={money(fi.otrosIngresos)} /></G3></Block>
+    <Block title="F. Comercio exterior"><G3>
+      <KV label="Importa" value={f.comex.imports.map(x => x.p).filter(Boolean).join(', ')} /><KV label="Exporta" value={f.comex.exports.map(x => x.p).filter(Boolean).join(', ')} />
+      <KV label="Medios de pago" value={MEDIOS_PAGO.filter(m => f.comex.pagos[m]).join(', ')} />
+      <KV label="Banco comex" value={f.comex.banco.nombre} /><KV label="Cuenta" value={f.comex.banco.cuenta} /><KV label="Tel. / País" value={f.comex.banco.tel + ' / ' + f.comex.banco.pais} /></G3>
+      <div className="text-xs font-bold text-gray-500 mt-3">Personas que realizan operaciones</div>
+      <Sub items={f.comex.personas} render={p => (<><KV label="Nombre" value={p.nombre} /><KV label="Documento" value={p.doc} /><KV label="Teléfono" value={p.tel} /><KV label="Dirección" value={p.dir} /><KV label="Email" value={p.email} /></>)} /></Block>
+    <Block title="G. Personas de contacto"><Sub items={f.contactos.filter(p => p.nombre || p.rol)} render={p => (<><KV label="Rol" value={p.rol} /><KV label="Nombre" value={p.nombre} /><KV label="Teléfono" value={p.tel} /><KV label="Email" value={p.email} /></>)} /></Block>
+    <Block title="H. Clientes y proveedores">
+      <div className="text-xs font-bold text-gray-500">Clientes</div><Sub items={f.clientes} render={p => (<><KV label="Nombre" value={p.nombre} /><KV label="Identificación" value={p.id} /><KV label="Dirección" value={p.dir} /></>)} />
+      <div className="text-xs font-bold text-gray-500 mt-3">Proveedores</div><Sub items={f.proveedores} render={p => (<><KV label="Nombre" value={p.nombre} /><KV label="Identificación" value={p.id} /><KV label="Dirección" value={p.dir} /></>)} /></Block>
+    <Block title="I. Referencias">
+      <Sub items={f.refCom} render={p => (<><KV label="Ref. comercial" value={p.nombre} /><KV label="Identificación" value={p.id} /><KV label="Teléfono" value={p.tel} /></>)} />
+      <Sub items={f.refBanc} render={p => (<><KV label="Entidad bancaria" value={p.entidad} /><KV label="Tipo / No. cuenta" value={p.tipo + ' ' + p.cuenta} /><KV label="Teléfono" value={p.tel} /></>)} /></Block>
+    <Block title="J. Calidad y seguridad"><G3>
+      <KV label="Sistema de gestión certificado" value={f.calidad.sgc + (f.calidad.sgcCual ? ' - ' + f.calidad.sgcCual : '')} /><KV label="BASC / OEA" value={f.calidad.basc + (f.calidad.bascCual ? ' - ' + f.calidad.bascCual : '')} /><KV label="Controles" value={f.calidad.controles} /></G3></Block>
+    <Block title="K. Visita de seguridad">
+      <G3><KV label="Atiende" value={f.visita.atiende} /><KV label="Cargo" value={f.visita.cargoAtiende} /><KV label="Fecha" value={fmtDate(f.visita.fecha)} /></G3>
+      <div className="mt-3 divide-y border rounded-lg">{VISITA_Q.map((q, i) => { const a = f.visita.q[i + 1] || {}; return (<div key={i} className="p-2 text-sm flex gap-2"><span className="text-gray-400 w-6">{i + 1}.</span><span className="flex-1">{q}{a.obs && <span className="block text-xs text-gray-500">Obs: {a.obs}</span>}</span><b className="w-10 text-right">{a.r || '—'}</b></div>); })}</div></Block>
+    <Block title="L. Declaraciones"><ul className="text-sm space-y-1">
+      {[['fondos', 'Origen lícito de fondos'], ['listas', 'Autorización consulta en listas'], ['datos', 'Tratamiento de datos personales'], ['basc', 'Compromisos BASC']].map(x => <li key={x[0]}>{f.decl[x[0]] ? '✅' : '⬜'} {x[1]}</li>)}</ul></Block>
+    <Block title="M. Firma"><G3><KV label="Firmante" value={f.firma.nombre} /><KV label="Documento" value={f.firma.doc} /><KV label="Cargo" value={f.firma.cargo} /><KV label="Ciudad" value={f.firma.ciudad} /><KV label="Fecha" value={fmtDate(f.firma.fecha)} /></G3></Block>
+
+    <Block title="Documentos cargados">
+      <div className="divide-y">{DOCS_REQ.map(d => { const fl = (c.files || {})[d.key]; return (<div key={d.key} className="py-2 flex items-center gap-3 text-sm">
+        <span className={'text-xs font-bold px-2 py-0.5 rounded-full ' + (fl ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>{fl ? 'Cargado' : 'Pendiente'}</span>
+        <span className="flex-1">{d.label}{fl && <span className="block text-xs text-gray-500">{fl.name}</span>}</span>{fl && dlLink(fl)}</div>); })}
+        {Object.keys(c.files || {}).filter(k => k.startsWith('otro_')).map(k => <div key={k} className="py-2 flex items-center gap-3 text-sm"><span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Adicional</span><span className="flex-1">{c.files[k].name}</span>{dlLink(c.files[k])}</div>)}
+      </div></Block>
+    <Block title="Documentos generados">
+      <div className="grid md:grid-cols-2 gap-2">{GEN_DOCS.map(d => (<div key={d.key} className="flex items-center gap-3 border rounded-lg p-3"><div className="flex-1 text-sm"><b className="text-[#C1272D]">{d.codigo}</b> · {d.titulo}</div>
+        <button className="btn btn-ghost text-xs" onClick={() => downloadPDF(d.key, f, c.tipo)}>PDF</button></div>))}</div>
+      <button className="btn btn-dark mt-3" onClick={() => GEN_DOCS.forEach((d, i) => setTimeout(() => downloadPDF(d.key, f, c.tipo), i * 700))}>⬇ Descargar todos</button></Block>
+  </div>);
+}
+
+function OfficerEval({ c, onSaved }) {
+  const [st, setSt] = useState({ estado: c.estado, riesgo: c.riesgo, puntaje: c.puntaje, fechaAprob: c.fechaAprob, proxAct: c.proxAct, obs: c.obs || '' });
+  const [hist, setHist] = useState(c.historial || []);
+  const [ok, setOk] = useState('');
+  const u = (k, v) => setSt(s => { const n = Object.assign({}, s, { [k]: v });
+    if (k === 'fechaAprob' && v && (!s.proxAct || s.proxAct === addYear(s.fechaAprob))) n.proxAct = addYear(v); return n; });
+  const save = () => {
+    const ch = [];
+    if (st.estado !== c.estado) ch.push('Estado: ' + c.estado + ' → ' + st.estado);
+    if (st.riesgo !== c.riesgo) ch.push('Riesgo: ' + c.riesgo + ' → ' + st.riesgo);
+    if (String(st.puntaje) !== String(c.puntaje)) ch.push('Puntaje: ' + (c.puntaje || '—') + ' → ' + (st.puntaje || '—'));
+    if (st.fechaAprob !== c.fechaAprob) ch.push('Fecha aprobación: ' + fmtDate(st.fechaAprob));
+    if (st.proxAct !== c.proxAct) ch.push('Próxima actualización: ' + fmtDate(st.proxAct));
+    const accion = 'Evaluación del Oficial de Cumplimiento' + (ch.length ? ' - ' + ch.join('; ') : ' (sin cambios de campos)');
+    const done = upsertClient(c.nit, Object.assign({}, st, { _log: { accion, nota: st.obs } }));
+    if (!done) { alert('No se pudo guardar (almacenamiento lleno).'); return; }
+    setHist(getClients()[c.nit].historial); setOk('Evaluación guardada ' + new Date().toLocaleTimeString('es-CO')); onSaved();
+  };
+  return (<div className="fade-in grid lg:grid-cols-2 gap-4">
+    <div className="card p-5">
+      <h3 className="font-bold mb-1">Evaluación del Oficial de Cumplimiento</h3>
+      <p className="text-xs text-gray-500 mb-4">{c.razon} · NIT {c.data ? c.data.gen.nit : c.nit}</p>
+      <div className="grid md:grid-cols-2 gap-3">
+        <Field label="Estado del trámite" options={ESTADOS} value={st.estado} onChange={v => u('estado', v)} />
+        <Field label="Nivel de riesgo" options={RIESGOS} value={st.riesgo} onChange={v => u('riesgo', v)} />
+        <Field label="Puntaje de riesgo" type="number" value={st.puntaje} onChange={v => u('puntaje', v)} />
+        <Field label="Fecha de aprobación" type="date" value={st.fechaAprob} onChange={v => u('fechaAprob', v)} />
+        <Field label="Fecha próxima actualización" type="date" value={st.proxAct} onChange={v => u('proxAct', v)} hint="Se sugiere 1 año después de la aprobación" />
+        <div className="md:col-span-2"><Field label="Observaciones del Oficial de Cumplimiento" rows={5} value={st.obs} onChange={v => u('obs', v)} /></div>
+      </div>
+      <div className="flex items-center gap-3 mt-4"><button className="btn btn-primary" onClick={save}>Guardar evaluación</button>{ok && <span className="text-sm text-green-700">{ok}</span>}</div>
+    </div>
+    <div className="card p-5">
+      <h3 className="font-bold mb-3">Historial de cambios</h3>
+      {hist.length === 0 && <p className="text-sm text-gray-400">Sin movimientos.</p>}
+      <ol className="relative border-l-2 border-red-200 ml-2 space-y-4 max-h-[560px] overflow-y-auto pr-2">
+        {hist.slice().reverse().map((h, i) => (<li key={i} className="ml-4"><span className="absolute -left-[7px] h-3 w-3 rounded-full bg-[#C1272D]" />
+          <div className="text-xs text-gray-400">{new Date(h.fecha).toLocaleString('es-CO')}</div><div className="text-sm font-medium">{h.accion}</div>{h.nota && <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap">{h.nota}</div>}</li>))}
+      </ol>
+    </div>
+  </div>);
+}
+</script>
+
+<!-- ============ BLOQUE 6: APP / SELECCION DE ROL ============ -->
+<script type="text/babel" data-presets="react">
+function Landing({ onClient, onAdmin }) {
+  const [askPass, setAskPass] = useState(false);
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(false);
+  const tryLogin = () => { if (pw === ADMIN_PASS) onAdmin(); else setErr(true); };
+  return (<div className="min-h-screen flex flex-col">
+    <div className="bg-[#1D1D1B] text-white"><div className="max-w-5xl mx-auto px-4 py-10 text-center">
+      <div className="inline-block bg-[#C1272D] px-4 py-1 rounded font-extrabold text-xl tracking-widest mb-4">TI CARGO</div>
+      <h1 className="text-2xl md:text-4xl font-extrabold">Portal de Vinculación SAGRILAFT</h1>
+      <p className="text-gray-300 mt-2 text-sm md:text-base">{CO.nombre} · NIT {CO.nit}</p></div>
+      <div className="h-1.5 bg-gradient-to-r from-[#C1272D] to-[#9E1F24]" /></div>
+    <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-10 grid md:grid-cols-2 gap-5">
+      <button onClick={onClient} className="card p-8 text-left hover:shadow-xl hover:-translate-y-1 transition group border-t-4 border-t-[#C1272D]">
+        <div className="h-14 w-14 rounded-2xl bg-red-50 text-[#C1272D] grid place-items-center text-3xl mb-4">🏢</div>
+        <h2 className="text-xl font-bold group-hover:text-[#C1272D]">Portal Cliente</h2>
+        <p className="text-sm text-gray-600 mt-2">Diligencie su información una sola vez, genere los formatos de vinculación y cargue sus documentos soporte.</p>
+        <span className="inline-block mt-4 text-sm font-semibold text-[#C1272D]">Ingresar →</span></button>
+      <div className="card p-8 text-left border-t-4 border-t-[#1D1D1B]">
+        <div className="h-14 w-14 rounded-2xl bg-gray-100 text-[#1D1D1B] grid place-items-center text-3xl mb-4">🛡️</div>
+        <h2 className="text-xl font-bold">Administración</h2>
+        <p className="text-sm text-gray-600 mt-2">Panel del Oficial de Cumplimiento: revisión de clientes, estado del trámite y evaluación de riesgo.</p>
+        {!askPass ? <button className="mt-4 text-sm font-semibold text-[#1D1D1B] hover:underline" onClick={() => setAskPass(true)}>Ingresar →</button> : (
+          <div className="mt-4 fade-in"><input autoFocus type="password" className={inputCls} placeholder="Contraseña" value={pw} onChange={e => { setPw(e.target.value); setErr(false); }} onKeyDown={e => e.key === 'Enter' && tryLogin()} />
+            {err && <p className="text-xs text-red-600 mt-1">Contraseña incorrecta.</p>}
+            <button className="btn btn-dark mt-2 w-full" onClick={tryLogin}>Entrar</button></div>)}
+      </div>
+    </main>
+    <footer className="text-center text-xs text-gray-500 py-6 px-4">{CO.dir} · {CO.tel} · {CO.email}<br />Oficial de Cumplimiento: {CO.oficial} · Datos almacenados localmente en este navegador.</footer>
+  </div>);
+}
+
+function App() {
+  const [role, setRole] = useState(null);
+  if (role === 'cliente') return <ClientPortal onExit={() => setRole(null)} />;
+  if (role === 'admin') return <AdminPanel onExit={() => setRole(null)} />;
+  return <Landing onClient={() => setRole('cliente')} onAdmin={() => setRole('admin')} />;
+}
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
