@@ -534,7 +534,22 @@ const PDF_GEN = {
 function downloadPDF(key, f, tipo) {
   const meta = GEN_DOCS.find(d => d.key === key);
   const doc = PDF_GEN[key](f, tipo);
-  doc.save(meta.file + '_' + (normNit(f.gen.nit) || 'cliente') + '.pdf');
+  const fileName = meta.file + '_' + (normNit(f.gen.nit) || 'cliente') + '.pdf';
+  try {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch(e) {
+    console.error('Descarga PDF fallback:', e);
+    doc.save(fileName);
+  }
 }
 </script>
 
@@ -924,13 +939,39 @@ function ClientPortal({ onExit }) {
     r.readAsDataURL(file);
   });
   const uploadOne = async (key, file) => { if (!file) return; const o = await readFile(file); if (o) persistFiles(Object.assign({}, files, { [key]: o })); };
+  const guessCategory = (filename) => {
+    const n = filename.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' ');
+    const has = (...words) => words.some(w => n.includes(w));
+    if (has('rut')) return 'rut';
+    if (has('camara', 'comercio', 'existencia', 'representacion')) return 'camara';
+    if (has('accionaria', 'accionista', 'composicion accionaria', 'socios')) return 'accionaria';
+    if (has('estado financiero', 'estados financieros', 'balance', 'eeff', 'pyg', 'perdidas y ganancias')) return 'estados_fin';
+    if (has('tarjeta profesional', 'tarjeta prof', 'tp_contador', 'tp_revisor')) return 'tarjeta_cont';
+    if ((has('cedula', 'cc', 'identificacion', 'documento identidad')) && (has('contador', 'revisor', 'fiscal', 'cont'))) return 'cedula_cont';
+    if ((has('cedula', 'cc', 'identificacion', 'documento identidad')) && (has('representante', 'legal', 'rep_legal', 'rl'))) return 'cedula_rl';
+    if (has('cedula', 'cc', 'identificacion', 'documento identidad')) return 'cedula_rl';
+    if (has('renta', 'declaracion de renta', 'decl_renta')) return 'renta';
+    if (has('referencia bancaria', 'ref bancaria', 'ref_banc', 'carta banco')) return 'ref_banc';
+    if (has('referencia comercial', 'ref comercial', 'ref_com', 'carta comercial')) return 'ref_com';
+    if (has('certificacion', 'resolucion', 'cert_', 'habilitacion')) return 'certs';
+    if (has('sgsst', 'arl', 'seguridad y salud')) return 'sgsst';
+    return null;
+  };
   const uploadMany = async (list) => {
     let nf = Object.assign({}, files);
     const pend = DOCS_REQ.map(d => d.key).filter(k => !nf[k]);
     let extra = Object.keys(nf).filter(k => k.startsWith('otro_')).length;
     for (const file of Array.from(list)) {
       const o = await readFile(file); if (!o) continue;
-      if (pend.length) nf[pend.shift()] = o; else nf['otro_' + (++extra)] = o;
+      const guess = guessCategory(file.name);
+      if (guess && pend.includes(guess)) {
+        nf[guess] = o;
+        pend.splice(pend.indexOf(guess), 1);
+      } else if (pend.length) {
+        nf[pend.shift()] = o;
+      } else {
+        nf['otro_' + (++extra)] = o;
+      }
     }
     persistFiles(nf);
   };
