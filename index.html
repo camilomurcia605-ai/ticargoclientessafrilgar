@@ -14,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   body { font-family: 'Inter', system-ui, sans-serif; background: #F5F5F5; color: #1D1D1B; }
   .fade-in { animation: fi .25s ease-out; }
@@ -24,6 +25,19 @@
   .btn-ghost { background:#fff; color:#1D1D1B; border:1px solid #d1d5db; } .btn-ghost:hover { background:#F5F5F5; }
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .card { background:#fff; border-radius:1rem; box-shadow:0 1px 3px rgba(0,0,0,.08); border:1px solid #eee; }
+  .alert-bar { background: linear-gradient(135deg, #FEF3C7, #FDE68A); border-left: 4px solid #D97706; padding: .75rem 1rem; border-radius: .5rem; margin-bottom: .75rem; }
+  .alert-bar-red { background: linear-gradient(135deg, #FEE2E2, #FECACA); border-left: 4px solid #DC2626; }
+  .tooltip-wrap { position: relative; display: inline-block; cursor: help; }
+  .tooltip-wrap .tooltip-text { visibility: hidden; opacity: 0; position: absolute; z-index: 50; bottom: 125%; left: 50%; transform: translateX(-50%); background: #1D1D1B; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: normal; width: 220px; text-align: center; transition: opacity .2s; pointer-events: none; }
+  .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+  .email-template { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; max-width: 480px; margin: 0 auto; font-family: 'Inter', sans-serif; }
+  .email-template-header { background: linear-gradient(135deg, #1D1D1B, #333); padding: 24px; text-align: center; }
+  .email-template-body { padding: 24px; }
+  .email-template-footer { background: #f9fafb; padding: 16px 24px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; }
+  .risk-meter { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; }
+  .risk-meter-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -41,6 +55,56 @@ const CO = {
   oficial: 'Cristian Camilo Murcia Olarte'
 };
 const ADMIN_PASS = 'ticargo2026';
+const KEY_SETTINGS = 'ticargo_settings_v1';
+const KEY_NOTES = 'ticargo_notes_v1';
+const KEY_LISTAS = 'ticargo_listas_v1';
+const KEY_RISK_MATRIX = 'ticargo_risk_v1';
+const getSettings = () => LS.get(KEY_SETTINGS, { notifyEmails: [], emailEnabled: false });
+const saveSettings = (s) => LS.set(KEY_SETTINGS, s);
+const getNotes = (nit) => LS.get(KEY_NOTES, {})[nit] || [];
+const saveNote = (nit, note) => { const all = LS.get(KEY_NOTES, {}); all[nit] = [...(all[nit]||[]), {...note, id:Date.now(), fecha:new Date().toISOString()}]; LS.set(KEY_NOTES, all); };
+const deleteNote = (nit, id) => { const all = LS.get(KEY_NOTES, {}); all[nit] = (all[nit]||[]).filter(n=>n.id!==id); LS.set(KEY_NOTES, all); };
+const getListasCheck = (nit) => LS.get(KEY_LISTAS, {})[nit] || [];
+const saveListasCheck = (nit, checks) => { const all = LS.get(KEY_LISTAS, {}); all[nit] = checks; LS.set(KEY_LISTAS, all); };
+const getRiskMatrix = (nit) => LS.get(KEY_RISK_MATRIX, {})[nit] || null;
+const saveRiskMatrix = (nit, matrix) => { const all = LS.get(KEY_RISK_MATRIX, {}); all[nit] = matrix; LS.set(KEY_RISK_MATRIX, all); };
+const DOC_EXPIRY_DAYS = { rut:60, camara:30, ref_banc:60, ref_com:60 };
+const DOC_EXPIRY_LABELS = { rut:'60 dias', camara:'1 mes', ref_banc:'60 dias', ref_com:'60 dias' };
+const RISK_FACTORS = {
+  cliente:{label:'Factor Cliente',items:[
+    {key:'tipo_persona',label:'Tipo de persona',opts:[['Juridica nacional',1],['Juridica extranjera',3],['Natural nacional',2],['Natural extranjera',4]]},
+    {key:'actividad',label:'Actividad economica',opts:[['Manufactura / produccion',1],['Comercio',2],['Servicios financieros',3],['Otro',2]]},
+    {key:'antiguedad',label:'Antiguedad del cliente',opts:[['Mas de 5 anos',1],['3 a 5 anos',2],['1 a 3 anos',3],['Menos de 1 ano',4]]},
+    {key:'pep',label:'Vinculacion PEP',opts:[['Sin vinculacion PEP',1],['PEP indirecto',3],['PEP directo',5]]},
+    {key:'rep_legal',label:'Reputacion legal',opts:[['Sin antecedentes',1],['Procesos civiles',2],['Procesos penales',4],['Lista restrictiva',5]]}
+  ]},
+  producto:{label:'Factor Producto/Servicio',items:[
+    {key:'tipo_op',label:'Tipo de operacion logistica',opts:[['Carga general',1],['Carga proyecto',2],['Carga peligrosa',3],['Valores / efectivo',5]]},
+    {key:'frecuencia',label:'Frecuencia de operaciones',opts:[['Mensual o mayor',1],['Trimestral',2],['Esporadica',3]]},
+    {key:'valor_op',label:'Valor promedio operaciones',opts:[['Menor a 50M COP',1],['50M - 200M COP',2],['200M - 1.000M COP',3],['Mayor a 1.000M COP',4]]}
+  ]},
+  canal:{label:'Factor Canal',items:[
+    {key:'medio',label:'Medio de contacto',opts:[['Presencial',1],['Virtual con verificacion',2],['Virtual sin verificacion',4]]},
+    {key:'vinculacion',label:'Forma de vinculacion',opts:[['Directa',1],['A traves de intermediario',3]]}
+  ]},
+  jurisdiccion:{label:'Factor Jurisdiccion',items:[
+    {key:'pais_origen',label:'Pais de origen de carga',opts:[['Colombia',1],['Pais GAFI / Bajo riesgo',2],['Pais riesgo medio',3],['Pais alto riesgo / OFAC',5]]},
+    {key:'pais_destino',label:'Pais de destino de carga',opts:[['Colombia',1],['Pais GAFI / Bajo riesgo',2],['Pais riesgo medio',3],['Pais alto riesgo / OFAC',5]]},
+    {key:'zona_ops',label:'Zona de operaciones nacionales',opts:[['Zona urbana principal',1],['Zona portuaria',2],['Zona fronteriza',4]]}
+  ]}
+};
+const calcRiskLevel = (score, maxScore) => { const pct = maxScore>0?(score/maxScore)*100:0; if(pct<=33) return 'Bajo'; if(pct<=66) return 'Medio'; return 'Alto'; };
+const RISK_COLORS = { 'Bajo':'#16A34A', 'Medio':'#D97706', 'Alto':'#DC2626', 'No evaluado':'#9CA3AF' };
+const COMM_TEMPLATES = [
+  {key:'docs_pendientes',label:'Solicitar documentos faltantes',subject:'Documentos pendientes - Vinculacion SAGRILAFT',
+    body:(c)=>{const pending=DOCS_REQ.filter(d=>!(c.files||{})[d.key]).map(d=>'  - '+d.label).join('\\n');return 'Cordial saludo '+(c.razon||'[Cliente]')+',\\n\\nDe acuerdo con el proceso de vinculacion SAGRILAFT de '+CO.nombre+', los siguientes documentos se encuentran pendientes:\\n\\n'+(pending||'  (Todos cargados)')+'\\n\\nAgradecemos su pronta gestion.\\n\\nCordialmente,\\n'+CO.oficial+'\\nOficial de Cumplimiento\\n'+CO.nombre;}},
+  {key:'aprobacion',label:'Notificar aprobacion',subject:'Vinculacion aprobada - SAGRILAFT',
+    body:(c)=>'Cordial saludo '+(c.razon||'[Cliente]')+',\\n\\nSu proceso de vinculacion SAGRILAFT con '+CO.nombre+' ha sido aprobado.\\n\\nNivel de riesgo: '+(c.riesgo||'Pendiente')+'\\nFecha de aprobacion: '+fmtDate(c.fechaAprob||todayISO())+'\\nProxima actualizacion: '+fmtDate(c.proxAct||'')+'\\n\\nRecuerde actualizar su informacion al menos una vez al ano.\\n\\nCordialmente,\\n'+CO.oficial+'\\nOficial de Cumplimiento\\n'+CO.nombre},
+  {key:'actualizacion',label:'Recordar actualizacion anual',subject:'Recordatorio actualizacion anual SAGRILAFT',
+    body:(c)=>'Cordial saludo '+(c.razon||'[Cliente]')+',\\n\\nSu informacion SAGRILAFT requiere actualizacion.\\n\\nFecha limite: '+fmtDate(c.proxAct||'')+'\\n\\nIngrese al Portal: https://ticargoclientesagrilaft.vercel.app\\nSeleccione "Actualizacion" e ingrese su NIT.\\n\\nCordialmente,\\n'+CO.oficial+'\\nOficial de Cumplimiento\\n'+CO.nombre},
+  {key:'rechazo',label:'Informar rechazo',subject:'Observaciones proceso de vinculacion SAGRILAFT',
+    body:(c)=>'Cordial saludo '+(c.razon||'[Cliente]')+',\\n\\nSe han encontrado las siguientes observaciones:\\n\\n[Detalle las observaciones aqui]\\n\\nPor favor subsane las observaciones mencionadas.\\n\\nCordialmente,\\n'+CO.oficial+'\\nOficial de Cumplimiento\\n'+CO.nombre}
+];
 const KEY_CLIENTS = 'ticargo_clients_v1';
 const KEY_DRAFT = 'ticargo_draft_v1';
 
@@ -1027,10 +1091,35 @@ function ClientPortal({ onExit }) {
       </div>)}
 
       {step === 2 && (<div className="fade-in">
+        {(() => {
+          const sects = [
+            {name:'A',check:()=>form.gen.razon&&form.gen.nit},
+            {name:'B',check:()=>form.contacto.dir&&form.contacto.email},
+            {name:'C',check:()=>form.reps[0]&&form.reps[0].nombre},
+            {name:'D',check:()=>form.accionistas.length>0&&form.accionistas[0].nombre},
+            {name:'E',check:()=>form.fin.activos||form.fin.ingresos},
+            {name:'F',check:()=>form.comex.imports&&form.comex.imports[0]&&form.comex.imports[0].p},
+            {name:'G',check:()=>form.contactos[0]&&form.contactos[0].nombre},
+            {name:'H',check:()=>(form.clientes&&form.clientes.length>0)||(form.proveedores&&form.proveedores.length>0)},
+            {name:'I',check:()=>(form.refCom&&form.refCom.length>0)||(form.refBanc&&form.refBanc.length>0)},
+            {name:'J',check:()=>form.calidad&&form.calidad.sgc},
+            {name:'K',check:()=>form.visita&&form.visita.atiende},
+            {name:'L',check:()=>form.decl&&form.decl.fondos&&form.decl.listas&&form.decl.datos},
+            {name:'M',check:()=>form.firma&&form.firma.nombre&&form.firma.doc}
+          ];
+          const done = sects.filter(s=>{try{return s.check();}catch(e){return false;}}).length;
+          const pct = Math.round(done/sects.length*100);
+          return (<div className="card p-3 mb-3 flex items-center gap-3">
+            <ProgressRing pct={pct} size={44} color={pct===100?'#16A34A':'#C1272D'} />
+            <div className="flex-1"><div className="text-sm font-semibold">Progreso del formulario</div>
+              <div className="flex gap-1 mt-1">{sects.map(s=>{let ok=false;try{ok=s.check();}catch(e){}return <span key={s.name} className={'text-[9px] font-bold px-1.5 py-0.5 rounded '+(ok?'bg-green-100 text-green-700':'bg-gray-100 text-gray-400')}>{s.name}</span>;})}</div></div>
+          </div>);
+        })()}
         <div className="mb-3"><h2 className="text-lg md:text-xl font-bold">Formulario único</h2><p className="text-sm text-gray-500">Se guarda automáticamente mientras escribe. Los campos con * son obligatorios.</p></div>
         <FormUnico f={form} set={set} />
         <div className="flex justify-between mt-5">
           <button className="btn btn-ghost" onClick={() => go(1)}>← Atrás</button>
+          <button className="btn btn-ghost mr-2" onClick={() => { LS.set(KEY_DRAFT, { form, tipo, step: 2, ts: Date.now() }); alert('Borrador guardado. Puede continuar después con su NIT.'); onExit(); }}>Guardar y salir</button>
           <button className="btn btn-primary" onClick={saveForm}>Guardar y generar documentos →</button></div>
       </div>)}
 
@@ -1090,12 +1179,265 @@ const ESTADO_CLS = { 'Pendiente documentos': 'bg-amber-100 text-amber-800', 'En 
 const RIESGO_CLS = { 'Bajo': 'bg-green-100 text-green-800', 'Medio': 'bg-yellow-100 text-yellow-800', 'Alto': 'bg-red-100 text-red-800', 'No evaluado': 'bg-gray-100 text-gray-600' };
 const Badge = ({ cls, children }) => <span className={'inline-block px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ' + cls}>{children}</span>;
 
+function ProgressRing({ pct, size, color }) {
+  const r = 18, circ = 2 * Math.PI * r;
+  return (<svg width={size||48} height={size||48} viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
+    <circle cx="24" cy="24" r={r} fill="none" stroke={color||'#C1272D'} strokeWidth="4" strokeDasharray={circ} strokeDashoffset={circ-(pct/100)*circ} strokeLinecap="round" style={{transform:'rotate(-90deg)',transformOrigin:'50% 50%',transition:'stroke-dashoffset .35s'}} />
+    <text x="24" y="24" textAnchor="middle" dominantBaseline="central" fontSize="11" fontWeight="700" fill={color||'#C1272D'}>{Math.round(pct)}%</text>
+  </svg>);
+}
+
+function ExportExcel({ clients }) {
+  const doExport = () => {
+    const data = Object.values(clients).map(c => ({
+      'NIT': c.data ? c.data.gen.nit : c.nit, 'Razon Social': c.razon||'', 'Tipo': c.tipo||'',
+      'Estado': c.estado||'', 'Riesgo': c.riesgo||'', 'Puntaje': c.puntaje||'',
+      'Fecha Vinculacion': fmtDate(c.fechaVinc), 'Fecha Aprobacion': fmtDate(c.fechaAprob),
+      'Proxima Actualizacion': fmtDate(c.proxAct),
+      'Email': c.data ? c.data.contacto.email : '', 'Telefono': c.data ? c.data.contacto.tel : '',
+      'Ciudad': c.data ? c.data.contacto.ciudad : '',
+      'Docs Cargados': Object.keys(c.files||{}).length,
+      'Docs Pendientes': DOCS_REQ.length - Object.keys(c.files||{}).filter(k=>!k.startsWith('otro_')).length,
+      'Observaciones': c.obs||''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{wch:15},{wch:35},{wch:14},{wch:22},{wch:12},{wch:10},{wch:18},{wch:18},{wch:20},{wch:25},{wch:15},{wch:15},{wch:14},{wch:14},{wch:30}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clientes SAGRILAFT');
+    XLSX.writeFile(wb, 'Reporte_SAGRILAFT_' + todayISO() + '.xlsx');
+  };
+  return <button className="btn btn-dark" onClick={doExport}>Exportar Excel</button>;
+}
+
+function DashboardCharts({ clients }) {
+  const all = Object.values(clients);
+  const total = all.length;
+  const today = todayISO();
+  const estadoData = ESTADOS.map(e => ({ label: e, count: all.filter(c => c.estado === e).length }));
+  const riesgoData = RIESGOS.map(r => ({ label: r, count: all.filter(c => c.riesgo === r).length }));
+  const vencidos = all.filter(c => c.proxAct && c.proxAct < today);
+  const por_vencer = all.filter(c => {
+    if (!c.proxAct || c.proxAct < today) return false;
+    const d = new Date(c.proxAct+'T12:00:00'); const now = new Date();
+    return (d - now) / 86400000 <= 30;
+  });
+  const sin_docs = all.filter(c => {
+    const loaded = Object.keys(c.files||{}).filter(k=>!k.startsWith('otro_')).length;
+    return loaded < DOCS_REQ.length && c.estado !== 'Rechazado';
+  });
+  const maxEstado = Math.max(1, ...estadoData.map(d => d.count));
+  const EC = {'Pendiente documentos':'#F59E0B','En revision':'#3B82F6','Aprobado':'#16A34A','Rechazado':'#DC2626','Requiere informacion adicional':'#8B5CF6'};
+  return (<div className="fade-in space-y-4">
+    {vencidos.length > 0 && (<div className="alert-bar alert-bar-red flex items-start gap-2"><span className="text-xl">&#x1F6A8;</span><div><b className="text-red-800">{vencidos.length} cliente(s) con actualizacion VENCIDA</b><div className="text-xs text-red-700 mt-1">{vencidos.map(c=>c.razon).join(', ')}</div></div></div>)}
+    {por_vencer.length > 0 && (<div className="alert-bar flex items-start gap-2"><span className="text-xl">&#x26A0;&#xFE0F;</span><div><b className="text-amber-800">{por_vencer.length} cliente(s) proximos a vencer (30 dias)</b><div className="text-xs text-amber-700 mt-1">{por_vencer.map(c=>c.razon+' ('+fmtDate(c.proxAct)+')').join(', ')}</div></div></div>)}
+    {sin_docs.length > 0 && (<div className="alert-bar flex items-start gap-2"><span className="text-xl">&#x1F4CB;</span><div><b className="text-amber-800">{sin_docs.length} cliente(s) con documentos pendientes</b></div></div>)}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="card p-4 text-center"><div className="text-3xl font-extrabold text-[#1D1D1B]">{total}</div><div className="text-xs text-gray-500 mt-1">Total clientes</div></div>
+      <div className="card p-4 text-center"><div className="text-3xl font-extrabold text-green-600">{all.filter(c=>c.estado==='Aprobado').length}</div><div className="text-xs text-gray-500 mt-1">Aprobados</div></div>
+      <div className="card p-4 text-center"><div className="text-3xl font-extrabold text-amber-600">{all.filter(c=>c.estado==='En revision'||c.estado==='Pendiente documentos').length}</div><div className="text-xs text-gray-500 mt-1">En proceso</div></div>
+      <div className="card p-4 text-center"><div className="text-3xl font-extrabold text-red-600">{vencidos.length}</div><div className="text-xs text-gray-500 mt-1">Vencidos</div></div>
+    </div>
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className="card p-5"><h4 className="font-bold text-sm mb-4">Clientes por estado</h4><div className="space-y-2">{estadoData.map(d=>(
+        <div key={d.label} className="flex items-center gap-2"><div className="w-28 text-xs text-gray-600 truncate" title={d.label}>{d.label}</div><div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full transition-all duration-500" style={{width:(d.count/maxEstado*100)+'%',background:EC[d.label]||'#6B7280'}} /></div><div className="w-8 text-right text-sm font-bold">{d.count}</div></div>
+      ))}</div></div>
+      <div className="card p-5"><h4 className="font-bold text-sm mb-4">Distribucion de riesgo</h4><div className="flex justify-center gap-6 mb-4">{riesgoData.filter(d=>d.count>0).map(d=>(
+        <div key={d.label} className="text-center"><ProgressRing pct={total>0?(d.count/total*100):0} color={RISK_COLORS[d.label]} /><div className="text-xs text-gray-600 mt-1">{d.label}</div><div className="text-sm font-bold">{d.count}</div></div>
+      ))}</div>{total===0&&<div className="text-center text-sm text-gray-400 py-4">Sin datos</div>}</div>
+    </div>
+  </div>);
+}
+
+function EmailSettings() {
+  const [settings, setSettings] = useState(getSettings());
+  const [newEmail, setNewEmail] = useState('');
+  const add = () => { if(newEmail&&newEmail.includes('@')){const s={...settings,notifyEmails:[...settings.notifyEmails,newEmail]};setSettings(s);saveSettings(s);setNewEmail('');} };
+  const remove = (i) => { const s={...settings,notifyEmails:settings.notifyEmails.filter((_,j)=>j!==i)};setSettings(s);saveSettings(s); };
+  const toggle = () => { const s={...settings,emailEnabled:!settings.emailEnabled};setSettings(s);saveSettings(s); };
+  return (<div className="fade-in space-y-4">
+    <div className="card p-5">
+      <h3 className="font-bold mb-1">Configuracion de notificaciones por email</h3>
+      <p className="text-xs text-gray-500 mb-4">Configure los correos que recibiran notificacion cuando un cliente registre o actualice informacion.</p>
+      <div className="flex items-center gap-3 mb-4">
+        <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={settings.emailEnabled} onChange={toggle} className="w-4 h-4 accent-[#C1272D]" /><span className="text-sm font-semibold">Activar notificaciones</span></label>
+        <span className={'text-xs px-2 py-0.5 rounded-full font-semibold '+(settings.emailEnabled?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')}>{settings.emailEnabled?'Activo':'Inactivo'}</span>
+      </div>
+      <div className="flex gap-2 mb-3"><input className={inputCls} placeholder="correo@ejemplo.com" value={newEmail} onChange={e=>setNewEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()} /><button className="btn btn-primary" onClick={add}>Agregar</button></div>
+      {settings.notifyEmails.length===0&&<p className="text-sm text-gray-400">No hay correos configurados.</p>}
+      <div className="space-y-1">{settings.notifyEmails.map((em,i)=>(
+        <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2"><span className="flex-1 text-sm">{em}</span><button className="text-red-500 text-xs hover:underline" onClick={()=>remove(i)}>Eliminar</button></div>
+      ))}</div>
+    </div>
+    <div className="card p-5">
+      <h3 className="font-bold mb-1">Vista previa del email de notificacion</h3>
+      <p className="text-xs text-gray-500 mb-4">Asi se veria el correo que recibiria el Oficial de Cumplimiento.</p>
+      <div className="email-template">
+        <div className="email-template-header"><div className="inline-block bg-[#C1272D] px-3 py-1 rounded font-extrabold text-white text-lg tracking-widest mb-2">TI CARGO</div><div className="text-gray-300 text-xs">Sistema de Gestion SAGRILAFT</div></div>
+        <div className="email-template-body">
+          <div className="text-center mb-4"><div className="inline-block bg-green-100 rounded-full h-14 w-14 leading-[56px] text-2xl">&#x2705;</div></div>
+          <h2 className="text-center text-lg font-bold mb-2" style={{color:'#1D1D1B'}}>Nuevo cliente registrado</h2>
+          <p className="text-sm text-gray-600 text-center mb-4">Un cliente ha completado su proceso de vinculacion en el Portal SAGRILAFT.</p>
+          <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2">
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Empresa:</span><b>Ejemplo S.A.S.</b></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">NIT:</span><b>900.123.456-7</b></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Tipo:</span><b>Vinculacion nueva</b></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Fecha:</span><b>{fmtDate(todayISO())}</b></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Documentos:</span><b>8 de 12 cargados</b></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Estado:</span><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-semibold">En revision</span></div>
+          </div>
+          <div className="text-center"><span className="inline-block bg-[#C1272D] text-white px-6 py-2 rounded-lg text-sm font-semibold">Ver en el Portal</span></div>
+        </div>
+        <div className="email-template-footer"><div>{CO.nombre}</div><div>{CO.dir}</div><div className="mt-1">Este es un mensaje automatico del Portal SAGRILAFT</div></div>
+      </div>
+    </div>
+  </div>);
+}
+
+function RiskMatrixPanel({ c, onSaved }) {
+  const [matrix, setMatrix] = useState(getRiskMatrix(c.nit)||{});
+  const [saved, setSaved] = useState('');
+  const u = (factor, key, val) => setMatrix(m=>({...m,[factor+'_'+key]:parseInt(val)||0}));
+  const getVal = (factor, key) => matrix[factor+'_'+key]||0;
+  const calcScore = () => { let total=0,max=0; Object.entries(RISK_FACTORS).forEach(([cat,fac])=>{fac.items.forEach(item=>{total+=getVal(cat,item.key);max+=Math.max(...item.opts.map(o=>o[1]));}); }); return {total,max}; };
+  const {total,max} = calcScore();
+  const level = calcRiskLevel(total,max);
+  const pct = max>0?(total/max*100):0;
+  const save = () => {
+    saveRiskMatrix(c.nit,matrix);
+    upsertClient(c.nit,{riesgo:level,puntaje:total,_log:{accion:'Matriz de riesgo - '+total+'/'+max+' = '+level,nota:''}});
+    onSaved(); setSaved('Guardado '+new Date().toLocaleTimeString('es-CO'));
+  };
+  return (<div className="fade-in">
+    <div className="card p-5 mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <div><h3 className="font-bold">Matriz de riesgo LA/FT/FPADM</h3><p className="text-xs text-gray-500">{c.razon} - NIT {c.data?c.data.gen.nit:c.nit}</p></div>
+        <div className="text-center"><div className="text-3xl font-extrabold" style={{color:RISK_COLORS[level]}}>{total}</div><div className="text-xs text-gray-500">de {max} pts</div></div>
+      </div>
+      <div className="risk-meter mb-2"><div className="risk-meter-fill" style={{width:pct+'%',background:RISK_COLORS[level]}} /></div>
+      <div className="flex justify-between text-xs mb-4"><span className="text-green-600 font-semibold">Bajo</span><span className="text-amber-600 font-semibold">Medio</span><span className="text-red-600 font-semibold">Alto</span></div>
+      <div className="text-center"><span className={'text-sm font-bold px-4 py-1 rounded-full '+(level==='Bajo'?'bg-green-100 text-green-800':level==='Medio'?'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-800')}>Nivel de riesgo: {level}</span></div>
+    </div>
+    {Object.entries(RISK_FACTORS).map(([cat,fac])=>(
+      <div key={cat} className="card p-4 mb-3"><h4 className="font-bold text-sm text-[#9E1F24] mb-3">{fac.label}</h4>
+        <div className="space-y-3">{fac.items.map(item=>(
+          <div key={item.key}><label className="text-sm font-medium text-gray-700">{item.label}</label>
+            <select className={inputCls+' mt-1'} value={getVal(cat,item.key)} onChange={e=>u(cat,item.key,e.target.value)}>
+              <option value="0">-- Seleccione --</option>
+              {item.opts.map(([label,score])=><option key={label} value={score}>{label} (peso: {score})</option>)}
+            </select></div>
+        ))}</div></div>
+    ))}
+    <div className="flex items-center gap-3 mt-2"><button className="btn btn-primary" onClick={save}>Guardar matriz de riesgo</button>{saved&&<span className="text-sm text-green-700">{saved}</span>}</div>
+  </div>);
+}
+
+function NotesPanel({ c, onAlert }) {
+  const [notes, setNotes] = useState(getNotes(c.nit));
+  const [text, setText] = useState('');
+  const [tipo, setTipo] = useState('nota');
+  const add = () => { if(!text.trim()) return; saveNote(c.nit,{text,tipo,done:false}); setNotes(getNotes(c.nit)); setText(''); };
+  const remove = (id) => { deleteNote(c.nit,id); setNotes(getNotes(c.nit)); };
+  const toggleDone = (id) => { const all=LS.get(KEY_NOTES,{}); all[c.nit]=(all[c.nit]||[]).map(n=>n.id===id?{...n,done:!n.done}:n); LS.set(KEY_NOTES,all); setNotes(all[c.nit]); };
+  return (<div className="card p-5 mb-3">
+    <h3 className="font-bold text-sm uppercase tracking-wide text-[#9E1F24] mb-3">Notas y seguimiento</h3>
+    <div className="flex gap-2 mb-3">
+      <select className={inputCls+' w-36'} value={tipo} onChange={e=>setTipo(e.target.value)}><option value="nota">Nota</option><option value="tarea">Tarea</option><option value="alerta">Alerta</option></select>
+      <input className={inputCls} placeholder="Escriba una nota o tarea..." value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==='Enter'&&add()} />
+      <button className="btn btn-primary" onClick={add}>+</button>
+    </div>
+    {notes.length===0&&<p className="text-sm text-gray-400">Sin notas.</p>}
+    <div className="space-y-1 max-h-64 overflow-y-auto">{notes.slice().reverse().map(n=>(
+      <div key={n.id} className={'flex items-start gap-2 rounded-lg px-3 py-2 text-sm '+(n.done?'bg-green-50 line-through text-gray-400':n.tipo==='alerta'?'bg-red-50':n.tipo==='tarea'?'bg-blue-50':'bg-gray-50')}>
+        {n.tipo==='tarea'&&<input type="checkbox" checked={n.done||false} onChange={()=>toggleDone(n.id)} className="mt-0.5 accent-[#C1272D]" />}
+        <span className="flex-1">{n.text}<span className="block text-[10px] text-gray-400">{new Date(n.fecha).toLocaleString('es-CO')}</span></span>
+        <button className="text-red-400 text-xs hover:text-red-600" onClick={()=>remove(n.id)}>x</button>
+      </div>
+    ))}</div>
+    <button className="btn btn-ghost mt-3 text-xs" onClick={onAlert}>Enviar alerta por email</button>
+  </div>);
+}
+
+function ListasCheckPanel({ c }) {
+  const [checks, setChecks] = useState(getListasCheck(c.nit));
+  const [lista, setLista] = useState('OFAC (SDN)');
+  const [result, setResult] = useState('Sin coincidencia');
+  const [screenshot, setScreenshot] = useState(null);
+  const [saved, setSaved] = useState('');
+  const LISTAS = ['OFAC (SDN)','ONU','Union Europea','Policia Nacional (DIJIN)','Procuraduria','Contraloria','SARLAFT / UIAF','Otra'];
+  const readImg = (file) => { if(!file) return; const r=new FileReader(); r.onload=()=>setScreenshot({name:file.name,data:r.result}); r.readAsDataURL(file); };
+  const add = () => {
+    const entry = {lista,result,fecha:todayISO(),screenshot:screenshot?screenshot.data:null,screenshotName:screenshot?screenshot.name:null,usuario:CO.oficial};
+    const updated = [...checks,entry]; saveListasCheck(c.nit,updated); setChecks(updated); setScreenshot(null);
+    setSaved('OK'); setTimeout(()=>setSaved(''),2000);
+  };
+  return (<div className="card p-5 mb-3">
+    <h3 className="font-bold text-sm uppercase tracking-wide text-[#9E1F24] mb-3">Consulta en listas restrictivas</h3>
+    <div className="grid md:grid-cols-2 gap-3 mb-3">
+      <div><label className="text-xs font-semibold text-gray-600">Lista consultada</label>
+        <select className={inputCls+' mt-1'} value={lista} onChange={e=>setLista(e.target.value)}>{LISTAS.map(l=><option key={l}>{l}</option>)}</select></div>
+      <div><label className="text-xs font-semibold text-gray-600">Resultado</label>
+        <select className={inputCls+' mt-1'} value={result} onChange={e=>setResult(e.target.value)}><option>Sin coincidencia</option><option>Coincidencia encontrada</option><option>Posible coincidencia (verificar)</option></select></div>
+    </div>
+    <div className="mb-3"><label className="text-xs font-semibold text-gray-600">Captura de pantalla de la consulta</label>
+      <input type="file" accept="image/*" className="mt-1 text-sm" onChange={e=>readImg(e.target.files[0])} />
+      {screenshot&&<div className="mt-2 border rounded-lg overflow-hidden max-h-40"><img src={screenshot.data} alt="preview" className="w-full object-contain max-h-40" /></div>}</div>
+    <div className="flex items-center gap-2"><button className="btn btn-primary" onClick={add}>Registrar consulta</button>{saved&&<span className="text-sm text-green-700">{saved}</span>}</div>
+    {checks.length>0&&(<div className="mt-4"><h4 className="text-xs font-bold text-gray-500 mb-2">Historial de consultas</h4>
+      <div className="space-y-2 max-h-72 overflow-y-auto">{checks.slice().reverse().map((ch,i)=>(
+        <div key={i} className={'border rounded-lg p-3 text-sm '+(ch.result==='Sin coincidencia'?'border-green-200 bg-green-50':ch.result==='Coincidencia encontrada'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50')}>
+          <div className="flex items-center justify-between"><b>{ch.lista}</b><span className={'text-xs font-semibold px-2 py-0.5 rounded-full '+(ch.result==='Sin coincidencia'?'bg-green-200 text-green-800':ch.result==='Coincidencia encontrada'?'bg-red-200 text-red-800':'bg-amber-200 text-amber-800')}>{ch.result}</span></div>
+          <div className="text-xs text-gray-500 mt-1">{fmtDate(ch.fecha)} - {ch.usuario}</div>
+          {ch.screenshot&&<div className="mt-2 border rounded overflow-hidden max-h-32 cursor-pointer" onClick={()=>window.open(ch.screenshot,'_blank')}><img src={ch.screenshot} alt="captura" className="w-full object-contain max-h-32" /></div>}
+        </div>
+      ))}</div></div>)}
+  </div>);
+}
+
+function CommTemplates({ c }) {
+  const [sel, setSel] = useState(null);
+  const [body, setBody] = useState('');
+  const [emailTo, setEmailTo] = useState(c.data ? c.data.contacto.email : '');
+  const [copied, setCopied] = useState(false);
+  const pick = (t) => { setSel(t.key); setBody(t.body(c)); };
+  const copy = () => { navigator.clipboard.writeText(body).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}); };
+  const mailto = () => { const t=COMM_TEMPLATES.find(x=>x.key===sel); window.open('mailto:'+encodeURIComponent(emailTo)+'?subject='+encodeURIComponent(t?t.subject:'')+'&body='+encodeURIComponent(body)); };
+  return (<div className="card p-5 mb-3">
+    <h3 className="font-bold text-sm uppercase tracking-wide text-[#9E1F24] mb-3">Plantillas de comunicacion</h3>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">{COMM_TEMPLATES.map(t=>(
+      <button key={t.key} onClick={()=>pick(t)} className={'text-left p-3 rounded-lg border text-xs font-semibold transition '+(sel===t.key?'border-[#C1272D] bg-red-50 text-[#C1272D]':'border-gray-200 hover:bg-gray-50')}>{t.label}</button>
+    ))}</div>
+    {sel&&(<div className="fade-in">
+      <div className="flex gap-2 mb-2"><input className={inputCls} placeholder="Correo destino" value={emailTo} onChange={e=>setEmailTo(e.target.value)} /></div>
+      <textarea className={inputCls+' font-mono text-xs'} rows={10} value={body} onChange={e=>setBody(e.target.value)} />
+      <div className="flex gap-2 mt-2"><button className="btn btn-primary" onClick={mailto}>Abrir en cliente de correo</button><button className="btn btn-ghost" onClick={copy}>{copied?'Copiado':'Copiar texto'}</button></div>
+    </div>)}
+  </div>);
+}
+
+function SendAlertModal({ c, onClose }) {
+  const [email, setEmail] = useState('');
+  const [msg, setMsg] = useState('Se requiere atencion para el cliente '+(c.razon||'')+' (NIT: '+(c.data?c.data.gen.nit:c.nit)+'). Estado: '+c.estado+'. Riesgo: '+c.riesgo+'.');
+  const [sent, setSent] = useState(false);
+  const send = () => { window.open('mailto:'+encodeURIComponent(email)+'?subject='+encodeURIComponent('Alerta SAGRILAFT - '+(c.razon||'Cliente'))+'&body='+encodeURIComponent(msg)); setSent(true); };
+  return (<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl fade-in" onClick={e=>e.stopPropagation()}>
+      <h3 className="font-bold text-lg mb-3">Enviar alerta por email</h3>
+      <input className={inputCls+' mb-2'} placeholder="Correo destino" value={email} onChange={e=>setEmail(e.target.value)} />
+      <textarea className={inputCls+' mb-3'} rows={5} value={msg} onChange={e=>setMsg(e.target.value)} />
+      <div className="flex gap-2"><button className="btn btn-primary flex-1" onClick={send}>Enviar alerta</button><button className="btn btn-ghost" onClick={onClose}>Cancelar</button></div>
+      {sent&&<p className="text-xs text-green-600 mt-2 text-center">Se abrio el cliente de correo.</p>}
+    </div>
+  </div>);
+}
+
 function AdminPanel({ onExit }) {
   const [clients, setClients] = useState(getClients());
-  const [tab, setTab] = useState('clientes');
+  const [tab, setTab] = useState('dashboard');
   const [sel, setSel] = useState(null);
   const [q, setQ] = useState('');
   const [fe, setFe] = useState('');
+  const [showAlert, setShowAlert] = useState(null);
   const reload = () => setClients(getClients());
   const list = Object.values(clients).filter(c => {
     const qq = q.trim().toLowerCase();
@@ -1104,50 +1446,63 @@ function AdminPanel({ onExit }) {
   }).sort((a, b) => String(b.fechaVinc).localeCompare(String(a.fechaVinc)));
   const cur = sel && clients[sel];
   const open = (k, t) => { setSel(k); setTab(t || 'detalle'); window.scrollTo({ top: 0 }); };
-  const tabs = [['clientes', 'Clientes'], ['detalle', 'Detalle cliente'], ['oficial', 'Oficial de Cumplimiento']];
+  const tabs = [['dashboard','Dashboard'],['clientes','Clientes'],['detalle','Detalle'],['oficial','Evaluacion'],['matriz','Matriz riesgo'],['listas','Listas'],['plantillas','Plantillas'],['config','Config']];
   const today = todayISO();
-  const stats = ESTADOS.map(e => [e, Object.values(clients).filter(c => c.estado === e).length]);
 
   return (<div className="min-h-screen pb-20">
     <Header title="Administración · Oficial de Cumplimiento" onBack={onExit} />
+    {showAlert && <SendAlertModal c={showAlert} onClose={() => setShowAlert(null)} />}
     <main className="max-w-6xl mx-auto px-3 md:px-4 py-5">
       <div className="flex gap-1 border-b border-gray-300 mb-5 overflow-x-auto">
-        {tabs.map(t => { const dis = t[0] !== 'clientes' && !cur; return (
-          <button key={t[0]} disabled={dis} onClick={() => setTab(t[0])} className={'px-4 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ' + (tab === t[0] ? 'border-[#C1272D] text-[#C1272D]' : 'border-transparent text-gray-600') + (dis ? ' opacity-40 cursor-not-allowed' : '')}>{t[1]}</button>); })}
+        {tabs.map(t => { const needClient = ['detalle','oficial','matriz','listas','plantillas'].includes(t[0]); const dis = needClient && !cur; return (
+          <button key={t[0]} disabled={dis} onClick={() => setTab(t[0])} className={'px-3 py-2 text-xs md:text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ' + (tab === t[0] ? 'border-[#C1272D] text-[#C1272D]' : 'border-transparent text-gray-600') + (dis ? ' opacity-40 cursor-not-allowed' : '')}>{t[1]}</button>); })}
         {cur && <span className="ml-auto self-center text-xs text-gray-500 hidden md:block pr-2">{cur.razon}</span>}
       </div>
 
+      {tab === 'dashboard' && <DashboardCharts clients={clients} />}
+
       {tab === 'clientes' && (<div className="fade-in">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-          {stats.map(s => <div key={s[0]} className="card p-3"><div className="text-2xl font-extrabold">{s[1]}</div><div className="text-[11px] text-gray-500">{s[0]}</div></div>)}
-        </div>
         <div className="flex flex-col md:flex-row gap-2 mb-3">
           <input className={inputCls} placeholder="Buscar por NIT o razón social..." value={q} onChange={e => setQ(e.target.value)} />
           <select className={inputCls + ' md:w-64'} value={fe} onChange={e => setFe(e.target.value)}><option value="">Todos los estados</option>{ESTADOS.map(e => <option key={e}>{e}</option>)}</select>
+          <ExportExcel clients={clients} />
         </div>
         <div className="card overflow-x-auto">
-          <table className="w-full text-sm min-w-[820px]">
+          <table className="w-full text-sm min-w-[900px]">
             <thead className="bg-[#1D1D1B] text-white text-xs uppercase"><tr>
-              {['NIT', 'Razón social', 'Fecha vinculación', 'Tipo', 'Estado', 'Riesgo', 'Próx. actualización'].map(h => <th key={h} className="text-left px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
+              {['NIT','Razón social','Vinculación','Tipo','Estado','Riesgo','Docs','Próx. act.'].map(h => <th key={h} className="text-left px-3 py-2.5 font-semibold">{h}</th>)}</tr></thead>
             <tbody>
-              {list.length === 0 && <tr><td colSpan={7} className="text-center text-gray-500 py-10">No hay clientes registrados.</td></tr>}
-              {list.map(c => (<tr key={c.nit} onClick={() => open(c.nit)} className="border-t hover:bg-red-50 cursor-pointer">
+              {list.length === 0 && <tr><td colSpan={8} className="text-center text-gray-500 py-10">No hay clientes registrados.</td></tr>}
+              {list.map(c => { const docsLoaded = Object.keys(c.files||{}).filter(k=>!k.startsWith('otro_')).length; const docsPct = Math.round(docsLoaded/DOCS_REQ.length*100); return (<tr key={c.nit} onClick={() => open(c.nit)} className="border-t hover:bg-red-50 cursor-pointer">
                 <td className="px-3 py-2.5 font-mono text-xs">{c.data ? c.data.gen.nit : c.nit}</td>
                 <td className="px-3 py-2.5 font-medium">{c.razon}</td>
-                <td className="px-3 py-2.5">{fmtDate(c.fechaVinc)}</td>
-                <td className="px-3 py-2.5">{c.tipo}</td>
+                <td className="px-3 py-2.5 text-xs">{fmtDate(c.fechaVinc)}</td>
+                <td className="px-3 py-2.5 text-xs">{c.tipo}</td>
                 <td className="px-3 py-2.5"><Badge cls={ESTADO_CLS[c.estado] || ''}>{c.estado}</Badge></td>
                 <td className="px-3 py-2.5"><Badge cls={RIESGO_CLS[c.riesgo] || ''}>{c.riesgo}</Badge></td>
-                <td className="px-3 py-2.5">{c.proxAct ? <span className={c.proxAct < today ? 'text-red-600 font-semibold' : ''}>{fmtDate(c.proxAct)}{c.proxAct < today ? ' (vencida)' : ''}</span> : <span className="text-gray-400">—</span>}</td>
-              </tr>))}
+                <td className="px-3 py-2.5"><div className="flex items-center gap-1"><div className="w-12 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:docsPct+'%',background:docsPct===100?'#16A34A':'#D97706'}} /></div><span className="text-[10px] text-gray-500">{docsLoaded}/{DOCS_REQ.length}</span></div></td>
+                <td className="px-3 py-2.5 text-xs">{c.proxAct ? <span className={c.proxAct < today ? 'text-red-600 font-bold pulse-dot' : ''}>{fmtDate(c.proxAct)}{c.proxAct < today ? ' !' : ''}</span> : <span className="text-gray-400">—</span>}</td>
+              </tr>); })}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500 mt-3">Almacenamiento local usado: {(LS.size() / 1048576).toFixed(2)} MB de ~5 MB.</p>
+        <p className="text-xs text-gray-500 mt-3">Almacenamiento local: {(LS.size() / 1048576).toFixed(2)} MB - {Object.keys(clients).length} cliente(s)</p>
       </div>)}
 
-      {tab === 'detalle' && cur && <ClientDetail c={cur} onOfficer={() => setTab('oficial')} />}
+      {tab === 'detalle' && cur && (<div className="fade-in">
+        <ClientDetail c={cur} onOfficer={() => setTab('oficial')} />
+        <div className="grid lg:grid-cols-2 gap-4 mt-4">
+          <NotesPanel c={cur} onAlert={() => setShowAlert(cur)} />
+          <ListasCheckPanel c={cur} />
+        </div>
+        <CommTemplates c={cur} />
+      </div>)}
+
       {tab === 'oficial' && cur && <OfficerEval key={cur.nit} c={cur} onSaved={reload} />}
+      {tab === 'matriz' && cur && <RiskMatrixPanel key={cur.nit} c={cur} onSaved={reload} />}
+      {tab === 'listas' && cur && <ListasCheckPanel c={cur} />}
+      {tab === 'plantillas' && cur && <CommTemplates c={cur} />}
+      {tab === 'config' && <EmailSettings />}
     </main>
   </div>);
 }
@@ -1209,9 +1564,21 @@ function ClientDetail({ c, onOfficer }) {
     <Block title="M. Firma"><G3><KV label="Firmante" value={f.firma.nombre} /><KV label="Documento" value={f.firma.doc} /><KV label="Cargo" value={f.firma.cargo} /><KV label="Ciudad" value={f.firma.ciudad} /><KV label="Fecha" value={fmtDate(f.firma.fecha)} /></G3></Block>
 
     <Block title="Documentos cargados">
-      <div className="divide-y">{DOCS_REQ.map(d => { const fl = (c.files || {})[d.key]; return (<div key={d.key} className="py-2 flex items-center gap-3 text-sm">
+      <div className="divide-y">{DOCS_REQ.map(d => { const fl = (c.files || {})[d.key];
+        let expStatus = null;
+        if (fl && fl.date && DOC_EXPIRY_DAYS[d.key]) {
+          const uploaded = new Date(fl.date+'T12:00:00');
+          const expires = new Date(uploaded.getTime() + DOC_EXPIRY_DAYS[d.key]*86400000);
+          const daysLeft = Math.ceil((expires - new Date()) / 86400000);
+          if (daysLeft <= 0) expStatus = {cls:'bg-red-100 text-red-700', text:'Vencido'};
+          else if (daysLeft <= 15) expStatus = {cls:'bg-amber-100 text-amber-700', text:'Vence en '+daysLeft+'d'};
+          else expStatus = {cls:'bg-green-100 text-green-700', text:daysLeft+'d vigente'};
+        }
+        return (<div key={d.key} className="py-2 flex items-center gap-3 text-sm">
         <span className={'text-xs font-bold px-2 py-0.5 rounded-full ' + (fl ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700')}>{fl ? 'Cargado' : 'Pendiente'}</span>
-        <span className="flex-1">{d.label}{fl && <span className="block text-xs text-gray-500">{fl.name}</span>}</span>{fl && dlLink(fl)}</div>); })}
+        <span className="flex-1">{d.label}{DOC_EXPIRY_LABELS[d.key] && <span className="text-[10px] text-gray-400 ml-1">(vigencia: {DOC_EXPIRY_LABELS[d.key]})</span>}{fl && <span className="block text-xs text-gray-500">{fl.name}{fl.date ? ' - ' + fmtDate(fl.date) : ''}</span>}</span>
+        {expStatus && <span className={'text-[10px] font-bold px-2 py-0.5 rounded-full ' + expStatus.cls}>{expStatus.text}</span>}
+        {fl && dlLink(fl)}</div>); })}
         {Object.keys(c.files || {}).filter(k => k.startsWith('otro_')).map(k => <div key={k} className="py-2 flex items-center gap-3 text-sm"><span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Adicional</span><span className="flex-1">{c.files[k].name}</span>{dlLink(c.files[k])}</div>)}
       </div></Block>
     <Block title="Documentos generados">
